@@ -21,28 +21,10 @@ reset:
 	orr r0, r0, #0xd3
 	msr cpsr, r0
 
-	ldr r3, TEGRA_APB_MISC_BASE
-	orr r3, #0x3000
-	mov r2, #0x21
-	str r2, [r3, #0x12c]
+	ldr sp, =_start
+	add sp, #256 << 10
 
-	ldr r3, TEGRA_GPIO_BASE
-
-	ldr r2, [r3, #0x20c]
-	orr r2, #1
-	str r2, [r3, #0x20c]
-
-	ldr r2, [r3, #0x22c]
-	orr r2, #1
-	str r2, [r3, #0x22c]
-
-	ldr r2, [r3, #0x21c]
-	orr r2, #1
-	str r2, [r3, #0x21c]
-
-loop:
-	
-	b loop
+	b start
 
 undefined_instruction:
 	b undefined_instruction
