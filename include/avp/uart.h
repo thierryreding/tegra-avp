@@ -5,7 +5,7 @@ struct uart {
 	unsigned long base;
 };
 
-void uart_init(struct uart *uart, unsigned long base);
+void uart_init(struct uart *uart, unsigned long base, unsigned long baud);
 void uart_putc(struct uart *uart, char c);
 void uart_puts(struct uart *uart, const char *s);
 

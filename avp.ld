@@ -4,7 +4,7 @@ SECTIONS
 	. = 0x40000000;
 
 	.startup : {
-		start.o(.text)
+		arch/arm/start.o(.text)
 	}
 
 	.text : {
