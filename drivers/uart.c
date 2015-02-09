@@ -1,3 +1,5 @@
+#include <stdarg.h>
+
 #include <avp/io.h>
 #include <avp/types.h>
 #include <avp/uart.h>
@@ -77,4 +79,19 @@ void uart_puts(struct uart *uart, const char *s)
 		uart_putc(uart, *s);
 		s++;
 	}
+}
+
+int uart_printf(struct uart *uart, const char *format, ...)
+{
+	char buffer[80];
+	va_list ap;
+	int ret;
+
+	va_start(ap, format);
+	ret = vsnprintf(buffer, sizeof(buffer), format, ap);
+	va_end(ap);
+
+	uart_puts(uart, buffer);
+
+	return ret;
 }

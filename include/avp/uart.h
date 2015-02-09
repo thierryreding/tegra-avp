@@ -8,5 +8,6 @@ struct uart {
 void uart_init(struct uart *uart, unsigned long base, unsigned long baud);
 void uart_putc(struct uart *uart, char c);
 void uart_puts(struct uart *uart, const char *s);
+int uart_printf(struct uart *uart, const char *format, ...);
 
 #endif
