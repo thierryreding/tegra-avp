@@ -1,105 +1,143 @@
 #include <stdio.h>
+#include <string.h>
 
-uint32_t __div64_32(uint64_t *n, uint32_t base)
-{
-	uint64_t rem = *n;
-	uint64_t b = base;
-	uint64_t res, d = 1;
-	uint32_t high = rem >> 32;
-
-	/* Reduce the thing a bit first */
-	res = 0;
-	if (high >= base) {
-		high /= base;
-		res = (uint64_t)high << 32;
-		rem -= (uint64_t)(high * base) << 32;
-	}
-
-	while ((int64_t)b > 0 && b < rem) {
-		b = b + b;
-		d = d + d;
-	}
-
-	do {
-		if (rem >= b) {
-			rem -= b;
-			res += d;
-		}
-
-		b >>= 1;
-		d >>= 1;
-	} while (d);
-
-	*n = res;
-	return rem;
-}
-
-#define do_div(n, base) ({				\
-	uint32_t __base = (base);			\
-	uint32_t __rem;					\
-	(void)(((typeof((n)) *)0) == ((uint64_t *)0));	\
-	if (((n) >> 32) == 0) {				\
-		__rem = (uint32_t)(n) % __base;		\
-		(n) = (uint32_t)(n) / __base;		\
-	} else {					\
-		__rem = __div64_32(&(n), __base);	\
-	}						\
-	__rem;						\
+#define do_div(n, base) ({		\
+	typeof(n) __rem = (n) % (base);	\
+	(n) = (n) / (base);		\
+	__rem;				\
 })
 
-#define LENGTH_NONE (0 << 0)
-#define LENGTH_BYTE (1 << 0)
-#define LENGTH_SHORT (2 << 0)
-#define LENGTH_LONG (3 << 0)
-#define LENGTH_LONG_LONG (4 << 0)
-#define LENGTH_SIZE (5 << 0)
+enum {
+	NONE,
+	BYTE,
+	SHORT,
+	LONG,
+	LONG_LONG,
+	SIZE_T,
+};
 
-#define LENGTH_MASK (7 << 0)
+#define ALTERNATE (1 << 0)
+#define LOWERCASE (1 << 1)
+#define ZEROPAD   (1 << 2)
 
-#define SPECIAL (1 << 8)
+struct printf_spec {
+	unsigned int base;
+	unsigned long length;
+	unsigned long flags;
+	unsigned int width;
+	char conv;
+};
 
-static int number(char *str, char type, unsigned long flags, va_list ap)
+static const char *parse_spec(const char *format, struct printf_spec *spec)
 {
-	static const char digits[16] = "0123456789ABCDEF";
-	unsigned long long value;
-	unsigned int base = 10;
-	char locase = 0x20;
-	int count = 0, i;
-	char tmp[20], ch;
-
-	if (type == 'o')
-		base = 8;
-
-	if (type == 'x' || type == 'X') {
-		if (flags & SPECIAL) {
-			*str++ = '0';
-			*str++ = type;
-		}
-
-		base = 16;
+	if (*format == '#') {
+		spec->flags |= ALTERNATE;
+		format++;
 	}
 
-	if (type == 'X')
-		locase = 0;
+	if (*format == '0') {
+		spec->flags |= ZEROPAD;
+		format++;
+	}
 
-	switch (flags & LENGTH_MASK) {
-	case LENGTH_BYTE:
+	if (*format == '-') {
+		/* pad with spaces */
+		format++;
+	}
+
+	if (isdigit(*format)) {
+		char *end;
+
+		spec->width = strtoul(format, &end, 10);
+
+		format = end;
+	}
+
+	switch (*format) {
+	case 'h':
+		if (format[1] == 'h') {
+			spec->length = BYTE;
+			format++;
+		} else {
+			spec->length = SHORT;
+		}
+
+		format++;
+		break;
+
+	case 'l':
+		if (format[1] == 'l') {
+			spec->length = LONG_LONG;
+			format++;
+		} else {
+			spec->length = LONG;
+		}
+
+		format++;
+		break;
+
+	case 'z':
+		spec->length = SIZE_T;
+		format++;
+		break;
+	}
+
+	spec->conv = *format++;
+
+	switch (spec->conv) {
+	case 'o':
+		spec->base = 8;
+		break;
+
+	case 'p':
+		spec->flags |= ALTERNATE | LOWERCASE;
+		spec->length = LONG;
+		spec->width = 8;
+		spec->base = 16;
+		break;
+
+	case 'x':
+		spec->flags |= LOWERCASE;
+	case 'X':
+		spec->base = 16;
+		break;
+
+	case 'd':
+	case 'i':
+	case 'u':
+		spec->base = 10;
+		break;
+	}
+
+	return format;
+}
+
+static char *number(char *str, struct printf_spec *spec, va_list ap)
+{
+	char locase = spec->flags & LOWERCASE ? 0x20 : 0x00;
+	static const char digits[16] = "0123456789ABCDEF";
+	unsigned int count = 0, i, width = spec->width;
+	unsigned long value;
+	char tmp[22];
+
+	switch (spec->length) {
+	case BYTE:
 		value = (unsigned char)va_arg(ap, int);
 		break;
 
-	case LENGTH_SHORT:
+	case SHORT:
 		value = (unsigned short)va_arg(ap, int);
 		break;
 
-	case LENGTH_LONG:
+	case LONG:
 		value = va_arg(ap, unsigned long);
 		break;
 
-	case LENGTH_LONG_LONG:
+	case LONG_LONG:
 		value = va_arg(ap, unsigned long long);
 		break;
 
-	case LENGTH_SIZE:
+	case SIZE_T:
 		value = va_arg(ap, size_t);
 		break;
 
@@ -108,92 +146,85 @@ static int number(char *str, char type, unsigned long flags, va_list ap)
 		break;
 	}
 
-	if (value < base)
-		str[count++] = digits[value];
-	else {
-		while (value)
-			tmp[count++] = digits[do_div(value, base)] | locase;
+	do {
+		unsigned char index = do_div(value, spec->base);
 
-		for (i = 0; i < count; i++)
-			str[i] = tmp[count - i - 1];
+		tmp[count++] = digits[index] | locase;
+	} while (value > 0);
+
+	/* add prefix */
+	if (spec->base == 16 && spec->flags & ALTERNATE) {
+		*str++ = '0';
+
+		if (spec->flags & LOWERCASE)
+			*str++ = 'x';
+		else
+			*str++ = 'X';
+
+		/* adjust field width to account for the prefix */
+		if (width > 1)
+			width -= 2;
 	}
 
-	if ((type == 'x' || type == 'X') && (flags & SPECIAL))
-		count += 2;
+	if (count < width) {
+		for (i = 0; i < width - count; i++) {
+			if (spec->flags & ZEROPAD)
+				*str++ = '0';
+			else
+				*str++ = ' ';
+		}
+	}
 
-	return count;
+	for (i = 0; i < count; i++)
+		*str++ = tmp[count - i - 1];
+
+	return str;
 }
 
 int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 {
+	char *end = str + size;
+	char *start = str;
 	const char *s;
-	size_t i = 0;
 
-	while (*format != '\0') {
+	while (str < end && *format != '\0') {
 		if (*format == '%') {
-			unsigned long flags = 0;
+			struct printf_spec spec = { 0, };
 
-			format++;
+			format = parse_spec(format + 1, &spec);
 
-			if (*format == '#') {
-				flags |= SPECIAL;
-				format++;
-			}
-
-			if (*format == 'h') {
-				format++;
-
-				if (*format == 'h')
-					flags |= LENGTH_BYTE;
-				else
-					flags |= LENGTH_SHORT;
-			}
-
-			if (*format == 'l') {
-				format++;
-
-				if (*format == 'l')
-					flags |= LENGTH_LONG_LONG;
-				else
-					flags |= LENGTH_LONG;
-			}
-
-			if (*format == 'z') {
-				format++;
-
-				flags |= LENGTH_SIZE;
-			}
-
-			switch (*format) {
+			switch (spec.conv) {
 			case 'd':
 			case 'i':
 			case 'o':
 			case 'u':
 			case 'x':
 			case 'X':
-				i += number(str, *format, flags, ap);
+				str = number(str, &spec, ap);
+				break;
+
+			case 'p':
+				str = number(str, &spec, ap);
 				break;
 
 			case 's':
 				s = va_arg(ap, const char *);
 
-				while (*s)
-					str[i++] = *s++;
+				while (str < end && *s != '\0')
+					*str++ = *s++;
 
 				break;
 
 			default:
-				str[i++] = *format;
+				*str++ = spec.conv;
 				break;
 			}
 		} else {
-			str[i++] = *format;
+			*str++ = *format++;
 		}
-
-		format++;
 	}
 
-	str[i++] = '\0';
+	*str++ = '\0';
 
-	return 0;
+	return str - start;
 }

@@ -1,11 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {
-	. = 0x40000000;
-
-	.startup : {
-		arch/arm/start.o(.text)
-	}
+	. = 0x4000e000;
 
 	.text : {
 		*(.text)

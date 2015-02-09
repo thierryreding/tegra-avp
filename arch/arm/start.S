@@ -15,6 +15,8 @@ _start:
 
 .balignl 16, 0xdeadbeef
 
+#define TEGRA_IRAM_BASE 0x40000000
+
 reset:
 	mrs r0, cpsr
 	bic r0, r0, #0x1f
@@ -23,12 +25,12 @@ reset:
 
 	/* setup IRQ stack pointer */
 	msr cpsr, #(0x12 | 0x80 | 0x40)
-	ldr sp, =_start
+	ldr sp, =TEGRA_IRAM_BASE
 	add sp, #256 << 10
 
 	/* setup SYS stack pointer */
 	msr cpsr, #(0x1f | 0x80 | 0x40)
-	ldr sp, =_start
+	ldr sp, =TEGRA_IRAM_BASE
 	add sp, #256 << 10
 	sub sp, #4 << 10
 

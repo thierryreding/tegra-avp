@@ -1,0 +1,36 @@
+include $(obj)/Makefile
+
+objs = $(addprefix $(obj),$(filter-out %/,$(obj-y)))
+deps = $(patsubst %.o,%.d,$(objs))
+subdirs = $(addprefix $(obj),$(filter %/,$(obj-y)))
+subdir-objs = $(addsuffix built-in.o,$(subdirs))
+
+$(obj)built-in.o: $(objs) $(subdir-objs)
+	@echo "  LD      $@"
+	@$(LD) $(LDFLAGS) -r -o $@ $(objs) $(subdir-objs)
+
+$(obj)%.o: $(obj)%.c
+	@echo "  CC      $@"
+	@$(CC) $(CFLAGS) -o $@ -c $<
+
+$(obj)%.o: $(obj)%.S
+	@echo "  AS      $@"
+	@$(CC) $(CFLAGS) -o $@ -c $<
+
+$(obj)%.d: $(obj)%.c
+	@$(CC) $(CFLAGS) -MM $< > $@
+
+-include $(deps)
+
+$(subdir-objs): %/built-in.o:
+	@$(MAKE) -f scripts/Makefile.build obj=$*/
+
+$(addprefix clean-,$(subdirs)): clean-%:
+	@$(MAKE) -f scripts/Makefile.build obj=$* clean
+
+clean-files = $(objs) $(obj)built-in.o $(deps)
+
+clean: $(addprefix clean-,$(subdirs))
+	rm -f $(clean-files)
+
+.PHONY: $(subdir-objs)
