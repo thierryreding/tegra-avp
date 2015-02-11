@@ -1,3 +1,4 @@
+#include <ctype.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -46,7 +47,7 @@ static const char *parse_spec(const char *format, struct printf_spec *spec)
 	}
 
 	if (isdigit(*format)) {
-		char *end;
+		const char *end;
 
 		spec->width = strtoul(format, &end, 10);
 
@@ -90,7 +91,7 @@ static const char *parse_spec(const char *format, struct printf_spec *spec)
 		break;
 
 	case 'p':
-		spec->flags |= ALTERNATE | LOWERCASE;
+		spec->flags |= ZEROPAD | LOWERCASE | ALTERNATE;
 		spec->length = LONG;
 		spec->width = 8;
 		spec->base = 16;
@@ -112,39 +113,12 @@ static const char *parse_spec(const char *format, struct printf_spec *spec)
 	return format;
 }
 
-static char *number(char *str, struct printf_spec *spec, va_list ap)
+static char *number(char *str, struct printf_spec *spec, unsigned long value)
 {
 	char locase = spec->flags & LOWERCASE ? 0x20 : 0x00;
 	static const char digits[16] = "0123456789ABCDEF";
 	unsigned int count = 0, i, width = spec->width;
-	unsigned long value;
 	char tmp[22];
-
-	switch (spec->length) {
-	case BYTE:
-		value = (unsigned char)va_arg(ap, int);
-		break;
-
-	case SHORT:
-		value = (unsigned short)va_arg(ap, int);
-		break;
-
-	case LONG:
-		value = va_arg(ap, unsigned long);
-		break;
-
-	case LONG_LONG:
-		value = va_arg(ap, unsigned long long);
-		break;
-
-	case SIZE_T:
-		value = va_arg(ap, size_t);
-		break;
-
-	default:
-		value = va_arg(ap, unsigned int);
-		break;
-	}
 
 	do {
 		unsigned char index = do_div(value, spec->base);
@@ -190,6 +164,7 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 	while (str < end && *format != '\0') {
 		if (*format == '%') {
 			struct printf_spec spec = { 0, };
+			unsigned long value;
 
 			format = parse_spec(format + 1, &spec);
 
@@ -200,11 +175,36 @@ int vsnprintf(char *str, size_t size, const char *format, va_list ap)
 			case 'u':
 			case 'x':
 			case 'X':
-				str = number(str, &spec, ap);
-				break;
-
 			case 'p':
-				str = number(str, &spec, ap);
+				switch (spec.length) {
+				case BYTE:
+					value = (unsigned char)va_arg(ap, int);
+					break;
+
+				case SHORT:
+					value = (unsigned short)va_arg(ap, int);
+					break;
+
+				case LONG:
+					value = va_arg(ap, unsigned long);
+					break;
+
+				/*
+				case LONG_LONG:
+					value = va_arg(ap, unsigned long long);
+					break;
+				*/
+
+				case SIZE_T:
+					value = va_arg(ap, size_t);
+					break;
+
+				default:
+					value = va_arg(ap, unsigned int);
+					break;
+				}
+
+				str = number(str, &spec, value);
 				break;
 
 			case 's':

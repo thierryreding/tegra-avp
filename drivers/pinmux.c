@@ -1,9 +1,9 @@
 #include <avp/io.h>
+#include <avp/iomap.h>
 #include <avp/pinmux.h>
 
-void pinmux_init(struct pinmux *pinmux, unsigned long base)
+void pinmux_init(struct pinmux *pinmux)
 {
-	pinmux->base = base;
 }
 
 void pinmux_config_apply(struct pinmux *pinmux,
@@ -11,24 +11,13 @@ void pinmux_config_apply(struct pinmux *pinmux,
 {
 	unsigned long value;
 
-	value = readl(pinmux->base + config->reg);
-
-	value &= ~0x3;
-	value |= config->func;
-
-	value &= ~(0x3 << 2);
-	value |= config->pull << 2;
-
-	if (config->tristate == PINMUX_TRISTATE_NORMAL)
-		value &= ~(1 << 4);
-	else
-		value |= 1 << 4;
-
-	if (config->input == PINMUX_INPUT_DISABLE)
-		value &= ~(1 << 5);
-	else
-		value |= 1 << 5;
-
-	writel(value, pinmux->base + config->reg);
+	value = config->ioreset << 8 | config->lock << 7 |
+		config->open_drain << 6 | config->input << 5 |
+		config->tristate << 4 | config->pull << 2 |
+		config->function;
+	writel(value, pinmux->base + config->offset);
 }
 
+struct pinmux pinmux = {
+	.base = TEGRA_APB_MISC_BASE,
+};

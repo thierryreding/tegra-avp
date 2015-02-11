@@ -3,7 +3,7 @@ AS = $(CROSS_COMPILE)as
 AFLAGS = -marm -march=armv4t -mcpu=arm720t -g
 CC = $(CROSS_COMPILE)gcc
 NOSTDINC_FLAGS = -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-CFLAGS = $(NOSTDINC_FLAGS) -DCONFIG_AEABI -I include -marm -march=armv4t -mcpu=arm720t -O0 -ggdb
+CFLAGS = $(NOSTDINC_FLAGS) -DCONFIG_AEABI -I include -marm -march=armv4t -mcpu=arm720t -O0 -ggdb -Wall -Werror
 LD = $(CROSS_COMPILE)ld
 LDFLAGS = -nostdlib
 

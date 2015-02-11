@@ -6,283 +6,167 @@
 #include <avp/io.h>
 #include <avp/iomap.h>
 #include <avp/pinmux.h>
+#include <avp/pmc.h>
 #include <avp/uart.h>
+#include <avp/usb.h>
 
-void intc_init(void)
-{
-	unsigned long base = TEGRA_INTC_BASE;
+#define GEN1_I2C_SDA 0x31a0
+#define GEN1_I2C_SCL 0x31a4
 
-	writel(0, base + 0x000);
-	readl(base + 0x000);
-}
+#define GPIO_PI3 0x31e8
+#define GPIO_PG4 0x3200
+#define GPIO_PG5 0x3204
+#define GPIO_PG6 0x3208
+#define GPIO_PG7 0x320c
 
-void car_apply(void)
-{
-	unsigned long base = TEGRA_CLK_RST_BASE;
-	unsigned long value;
-	struct car car;
+#define GPIO_PJ7 0x3230
+#define GPIO_PB0 0x3234
+#define GPIO_PB1 0x3238
+#define GPIO_PK7 0x323c
 
-	car_init(&car, TEGRA_CLK_RST_BASE);
+#define GEN2_I2C_SCL 0x3250
+#define GEN2_I2C_SDA 0x3254
 
-#if 0
-	value = readl(base + 0x028);
-	/* set clk_m as clock source */
-	value &= ~((0x7 << 12) | (0x7 << 8) | (0x7 << 4) | (0x7 << 0));
-	/* sys_state -> run */
-	value &= ~(0xf << 28);
-	value |= 2 << 28;
-	writel(value, base + 0x028);
+#define SDMMC4_CLK 0x3258
+#define SDMMC4_CMD 0x325c
+#define SDMMC4_DAT0 0x3260
+#define SDMMC4_DAT1 0x3264
+#define SDMMC4_DAT2 0x3268
+#define SDMMC4_DAT3 0x326c
+#define SDMMC4_DAT4 0x3270
+#define SDMMC4_DAT5 0x3274
+#define SDMMC4_DAT6 0x3278
+#define SDMMC4_DAT7 0x327c
 
-	/* get OSC frequency */
-	value = readl(base + 0x050);
-	value >>= 28;
+#define PWR_I2C_SCL 0x32b4
+#define PWR_I2C_SDA 0x32b8
 
-	switch (value) {
-	case 0: /* 13 MHz */
-		/*
-		 * pll_p
-		 */
-		value = readl(base + 0x0a0);
-		/* divm */
-		value &= ~(0x1f << 0);
-		value |= 13 << 0;
-		/* divn */
-		value &= ~(0x3ff << 8);
-		value |= 408 << 8;
-		/* divp */
-		value &= ~(0x7 << 20);
-		value |= 0 << 20;
-		/* allow base override */
-		value |= 1 << 28;
-		/* bypass */
-		value |= 1 << 31;
-		writel(value, base + 0x0a0);
-
-		/* cpcon */
-		value = readl(base + 0x0ac);
-		value &= ~(0xf << 8);
-		value |= 8 << 8;
-		writel(value, base + 0x0ac);
-
-		/* enable PLL */
-		value = readl(base + 0x0a0);
-		value |= 1 << 30;
-		writel(value, base + 0x0a0);
-
-		/* disallow base override */
-		value = readl(base + 0x0a0);
-		value &= ~(1 << 31);
-		writel(value, base + 0x0a0);
-
-		/*
-		 * pll_c
-		 */
-		value = readl(base + 0x080);
-		/* divm */
-		value &= ~(0xff << 0);
-		value |= 13 << 0;
-		/* divn */
-		value &= ~(0xff << 8);
-		value |= 600 << 8;
-		/* divp */
-		value &= ~(0xf << 20);
-		value |= 0 << 20;
-		/* allow base override */
-		value |= 1 << 28;
-		/* bypass */
-		value |= 1 << 31;
-		writel(value, base + 0x080);
-
-		/* cpcon */
-		value = readl(base + 0x08c);
-		value &= ~(0xf << 8);
-		value |= 8 << 8;
-		writel(value, base + 0x08c);
-
-		/* enable PLL */
-		value = readl(base + 0x080);
-		value |= 1 << 30;
-		writel(value, base + 0x080);
-
-		/* disallow base override */
-		value = readl(base + 0x080);
-		value &= ~(1 << 31);
-		writel(value, base + 0x080);
-		break;
-
-	case 8: /* 12 MHz */
-		/*
-		 * pll_p
-		 */
-		value = readl(base + 0x0a0);
-		/* divm */
-		value &= ~(0x1f << 0);
-		value |= 12 << 0;
-		/* divn */
-		value &= ~(0x3ff << 8);
-		value |= 408 << 8;
-		/* divp */
-		value &= ~(0x7 << 20);
-		value |= 0 << 20;
-		/* allow base override */
-		value |= 1 << 28;
-		/* bypass */
-		value |= 1 << 31;
-		writel(value, base + 0x0a0);
-
-		/* cpcon */
-		value = readl(base + 0x0ac);
-		value &= ~(0xf << 8);
-		value |= 8 << 8;
-		writel(value, base + 0x0ac);
-
-		/* enable PLL */
-		value = readl(base + 0x0a0);
-		value |= 1 << 30;
-		writel(value, base + 0x0a0);
-
-		/* disallow base override */
-		value = readl(base + 0x0a0);
-		value &= ~(1 << 31);
-		writel(value, base + 0x0a0);
-
-		/*
-		 * pll_c
-		 */
-		value = readl(base + 0x080);
-		/* divm */
-		value &= ~(0xff << 0);
-		value |= 12 << 0;
-		/* divn */
-		value &= ~(0xff << 8);
-		value |= 456 << 8;
-		/* divp */
-		value &= ~(0xf << 20);
-		value |= 1 << 20;
-		/* allow base override */
-		value |= 1 << 28;
-		/* bypass */
-		value |= 1 << 31;
-		writel(value, base + 0x080);
-
-		/* cpcon */
-		value = readl(base + 0x08c);
-		value &= ~(0xf << 8);
-		value |= 8 << 8;
-		writel(value, base + 0x08c);
-
-		/* enable PLL */
-		value = readl(base + 0x080);
-		value |= 1 << 30;
-		writel(value, base + 0x080);
-
-		/* disallow base override */
-		value = readl(base + 0x080);
-		value &= ~(1 << 31);
-		writel(value, base + 0x080);
-		break;
-	}
-
-	/* PLL_P_OUT1, PLL_P_OUT2 */
-	value = (0 << 16) | (0 << 0);
-	writel(value, base + 0x0a4);
-
-	value = (15 << 24) | (1 << 18) | (1 << 17) | (1 << 16) |
-		(83 <<  8) | (1 <<  2) | (1 <<  1) | (1 <<  0);
-	writel(value, base + 0x0a4);
-
-	/* PLL_P_OUT3, PLL_P_OUT4 */
-	value = (0 << 16) | (0 << 0);
-	writel(value, base + 0x0a8);
-
-	value = (2 << 24) | (1 << 18) | (1 << 17) | (1 << 16) |
-		(6 <<  8) | (1 <<  2) | (1 <<  1) | (1 <<  0);
-	writel(value, base + 0x0a4);
-
-	value = readl(base + 0x028);
-	/* set pll_p_out4 as clock source */
-	value &= ~((0x7 << 12) | (0x7 << 8) | (0x7 << 4) | (0x7 << 0));
-	value |= (2 << 12) | (2 << 8) | (2 << 4) | (2 << 0);
-	/* sys_state -> run */
-	value &= ~(0xf << 28);
-	value |= 2 << 28;
-	writel(value, base + 0x028);
-
-	writel(0x00561600, base + 0x088);
-	writel(0x01000000, base + 0x08c);
-#endif
-
-	/* disable UARTD clock */
-	clk_periph_disable(&car, &clk_uartd);
-
-	/* use pll_p_out0 as source */
-	clk_periph_set_source(&car, &clk_uartd, 0);
-
-	/* enable UARTD clock */
-	clk_periph_enable(&car, &clk_uartd);
-
-	/* assert reset */
-	reset_assert(&car, &rst_uartd);
-
-	/* deassert reset */
-	reset_deassert(&car, &rst_uartd);
-}
+#define KB_ROW7 0x32d8
+#define KB_ROW8 0x32dc
+#define KB_ROW9 0x32e0
+#define KB_ROW10 0x32e4
 
 static const struct pinmux_config pinmux_configs[] = {
-	/* PJ7 */
-	PINMUX_CONFIG(0x3230, UARTD, NORMAL, NORMAL, DISABLE),
-	/* PB0 */
-	PINMUX_CONFIG(0x3234, UARTD, UP, NORMAL, ENABLE),
-	/* PB1 */
-	PINMUX_CONFIG(0x3238, UARTD, UP, NORMAL, ENABLE),
-	/* PK7 */
-	PINMUX_CONFIG(0x323c, UARTD, NORMAL, NORMAL, DISABLE),
+	PINMUX_CONFIG(GEN1_I2C_SDA, I2C1,   NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(GEN1_I2C_SCL, I2C1,   NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+
+	PINMUX_CONFIG(GEN2_I2C_SCL, I2C2,   NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(GEN2_I2C_SDA, I2C2,   NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+
+	PINMUX_CONFIG(PWR_I2C_SCL,  I2CPWR, NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(PWR_I2C_SDA,  I2CPWR, NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+
+	PINMUX_CONFIG(SDMMC4_CLK,   SDMMC4, NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_CMD,   SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT0,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT1,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT2,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT3,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT4,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT5,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT6,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(SDMMC4_DAT7,  SDMMC4, UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+
+	PINMUX_CONFIG(GPIO_PJ7,     UARTD,  NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PB0,     UARTD,  UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PB1,     UARTD,  UP,     NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PK7,     UARTD,  NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+
+	PINMUX_CONFIG(GPIO_PG4,     SPI4,   NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PG5,     SPI4,   NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PG6,     SPI4,   NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PG7,     SPI4,   NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(GPIO_PI3,     SPI4,   NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+
+	PINMUX_CONFIG(KB_ROW7,      UARTA,  NORMAL, NORMAL, DISABLE, DISABLE, DISABLE),
+	PINMUX_CONFIG(KB_ROW8,      UARTA,  NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(KB_ROW9,      UARTA,  NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
+	PINMUX_CONFIG(KB_ROW10,     UARTA,  NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
 };
 
 void pinmux_apply(void)
 {
-	struct pinmux pinmux;
 	unsigned int i;
 
-	pinmux_init(&pinmux, TEGRA_APB_MISC_BASE);
+	pinmux_init(&pinmux);
 
 	for (i = 0; i < ARRAY_SIZE(pinmux_configs); i++)
 		pinmux_config_apply(&pinmux, &pinmux_configs[i]);
 }
 
+void car_apply(void)
+{
+	struct car car;
+
+	car_init(&car, TEGRA_CLK_RST_BASE);
+
+	/* use pll_p_out0 as source */
+	clk_periph_set_source(&car, &clk_uartd, 0);
+	clk_periph_enable(&car, &clk_uartd);
+	reset_assert(&car, &rst_uartd);
+	reset_deassert(&car, &rst_uartd);
+
+	/*
+	clk_periph_enable(&car, &clk_usbd);
+	reset_assert(&car, &rst_usbd);
+	reset_deassert(&car, &rst_usbd);
+	*/
+}
+
 void do_irq(void)
 {
-	struct uart uart;
-
-	uart_init(&uart, TEGRA_UARTD_BASE, 115200);
-	uart_puts(&uart, "IRQ\n");
+	uart_puts(debug, "IRQ\n");
 }
 
 void do_fiq(void)
 {
-	struct uart uart;
-
-	uart_init(&uart, TEGRA_UARTD_BASE, 115200);
-	uart_puts(&uart, "FIQ\n");
+	uart_puts(debug, "FIQ\n");
 }
 
 void start(void)
 {
-	unsigned long value, i, j;
-	struct uart uart;
-
-	intc_init();
 	pinmux_apply();
 	car_apply();
 
-	uart_init(&uart, TEGRA_UARTD_BASE, 115200);
-	uart_puts(&uart, "AVP\n");
+	uart_init(debug);
+	uart_puts(debug, "AVP\n");
+	uart_printf(debug, "%s\n", "foo");
 
-	uart_hexdump(&uart, (void *)TEGRA_IRAM_BASE, 60, 16, true);
+	uart_printf(debug, "setting up ARC...\n");
+	if (1) {
+		uint32_t value;
 
-	uart_printf(&uart, "AVP %s!\n", "foo");
+		value = readl(TEGRA_CLK_RST_BASE + 0x3a4);
+		value |= 1 << 19;
+		writel(value, TEGRA_CLK_RST_BASE + 0x3a4);
 
-	uart_printf(&uart, "foo: %02x\n", 0x05);
+		value = readl(TEGRA_CLK_RST_BASE + 0x014);
+		value |= 1 << 25;
+		writel(value, TEGRA_CLK_RST_BASE + 0x014);
+
+#define TEGRA_MC_BASE 0x70019000
+
+		/*
+		value = readl(TEGRA_MC_BASE + 0x964);
+		uart_printf(debug, "IRAM_CTRL: %08x\n", value);
+		value &= ~(1 << 0);
+		writel(value, TEGRA_MC_BASE + 0x964);
+		*/
+
+		/*
+		value = readl(TEGRA_MC_BASE + 0x65c);
+		uart_printf(debug, "IRAM_BOM: %08x\n", value);
+
+		value = readl(TEGRA_MC_BASE + 0x660);
+		uart_printf(debug, "IRAM_TOM: %08x\n", value);
+		*/
+	}
+	uart_printf(debug, "done\n");
+
+	usb_init(&usbd);
+
+	uart_flush(debug);
+	pmc_reset(&pmc, PMC_RESET_MODE_RCM);
 
 	while (1);
 }

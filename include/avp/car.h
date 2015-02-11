@@ -25,7 +25,8 @@ void clk_periph_disable(struct car *car, const struct clk_periph *clk);
 void clk_periph_set_source(struct car *car, const struct clk_periph *clk,
 			   unsigned int source);
 
-const struct clk_periph clk_uartd;
+extern const struct clk_periph clk_usbd;
+extern const struct clk_periph clk_uartd;
 
 struct reset {
 	unsigned int set;
@@ -33,7 +34,8 @@ struct reset {
 	unsigned int bit;
 };
 
-const struct reset rst_uartd;
+extern const struct reset rst_usbd;
+extern const struct reset rst_uartd;
 
 void reset_assert(struct car *car, const struct reset *rst);
 void reset_deassert(struct car *car, const struct reset *rst);

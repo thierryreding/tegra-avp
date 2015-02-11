@@ -1,27 +1,30 @@
 #include <avp/car.h>
 #include <avp/io.h>
 
-const struct clk_pll pll_p = {
-	.base = 0x0a0,
-	.misc = 0x0ac,
-};
-
-const struct clk_pll pll_c = {
-	.base = 0,
-	.misc = 0,
+const struct clk_periph clk_usbd = {
+	.set = 0x320,
+	.clr = 0x324,
+	.bit = 22,
+	.src = 0x000,
 };
 
 const struct clk_periph clk_uartd = {
 	.set = 0x330,
 	.clr = 0x334,
-	.bit = 0,
+	.bit = 1,
 	.src = 0x1c0,
+};
+
+const struct reset rst_usbd = {
+	.set = 0x300,
+	.clr = 0x304,
+	.bit = 22,
 };
 
 const struct reset rst_uartd = {
 	.set = 0x310,
 	.clr = 0x314,
-	.bit = 0,
+	.bit = 1,
 };
 
 void car_init(struct car *car, unsigned long base)

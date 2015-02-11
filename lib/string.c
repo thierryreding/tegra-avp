@@ -1,5 +1,6 @@
-#include <types.h>
+#include <ctype.h>
 #include <string.h>
+#include <types.h>
 
 char *strcpy(char *dest, const char *src)
 {
@@ -49,23 +50,47 @@ unsigned long strtoul(const char *nptr, const char **endptr, int base)
 
 void *memcpy(void *dest, const void *src, size_t n)
 {
-	const uint8_t *s = src;
-	uint8_t *d = dest;
-	size_t i;
+	const void *s = src, *end = src + n;
+	void *d = dest;
 
-	for (i = 0; i < n; i++)
-		d[i] = s[i];
+	while (s <= end - 4) {
+		*(uint32_t *)d = *(uint32_t *)s;
+		d += 4;
+		s += 4;
+	}
+
+	if (s <= end - 2) {
+		*(uint16_t *)d = *(uint16_t *)s;
+		d += 2;
+		s += 2;
+	}
+
+	if (s < end)
+		*(uint8_t *)d = *(uint8_t *)s;
 
 	return dest;
 }
 
 void *memset(void *s, int c, size_t n)
 {
-	uint8_t *p = s;
-	size_t i;
+	void *ptr = s, *end = s + n;
 
-	for (i = 0; i < n; i++)
-		p[i] = c;
+	while (ptr <= end - 4) {
+		uint32_t *p = ptr;
+		*p = (c << 24) | (c << 16) | (c << 8) | c;
+		ptr += 4;
+	}
+
+	if (ptr <= end - 2) {
+		uint16_t *p = ptr;
+		*p = (c << 8) | c;
+		ptr += 2;
+	}
+
+	if (ptr < end) {
+		uint8_t *p = ptr;
+		*p = c;
+	}
 
 	return s;
 }
