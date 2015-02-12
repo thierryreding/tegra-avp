@@ -322,7 +322,7 @@ UNWIND(.fnstart)
 UNWIND(.fnend)
 ENDPROC(__modsi3)
 
-#ifdef CONFIG_AEABI
+#ifdef __ARM_EABI__
 
 ENTRY(__aeabi_uidivmod)
 UNWIND(.fnstart)

@@ -1,0 +1,31 @@
+src := $(obj)
+
+PHONY := clean
+clean:
+
+include scripts/Kbuild.include
+include scripts/Makefile.lib
+include $(objtree)/config.mk
+
+kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
+include $(kbuild-dir)/Makefile
+
+objs = $(addprefix $(obj)/,$(filter-out %/,$(obj-y)))
+deps = $(patsubst %.o,%.d,$(objs))
+subdirs = $(addprefix $(obj)/,$(patsubst %/,%,$(filter %/,$(obj-y))))
+
+__clean-files := $(objs) $(deps) $(obj)/built-in.o
+
+PHONY += $(subdirs)
+$(subdirs):
+	$(Q)$(MAKE) $(clean)=$@
+
+quiet_cmd_clean = CLEAN $(obj)
+      cmd_clean = rm -f $(__clean-files)
+
+clean: $(subdirs)
+ifneq ($(strip $(__clean-files)),)
+	$(call cmd,clean)
+endif
+
+.PHONY: $(PHONY)

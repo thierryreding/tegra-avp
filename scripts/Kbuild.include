@@ -1,0 +1,11 @@
+squote := '
+
+escsq = $(subst $(squote),'\$(squote)',$1)
+
+echo-cmd = $(if $($(quiet)cmd_$(1)),	\
+	echo '  $(call escsq,$($(quiet)cmd_$(1)))$(echo-why)';)
+
+cmd = @$(echo-cmd) $(cmd_$(1))
+
+build := -f $(srctree)/scripts/Makefile.build obj
+clean := -f $(srctree)/scripts/Makefile.clean obj

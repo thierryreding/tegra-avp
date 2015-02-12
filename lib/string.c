@@ -21,7 +21,7 @@ unsigned long strtoul(const char *nptr, const char **endptr, int base)
 	unsigned long num = 0;
 
 	while (isdigit_base(*nptr, base)) {
-		unsigned long value;
+		unsigned long value = 0;
 
 		if (base == 16) {
 			if (*nptr >= 'a' && *nptr <= 'f')

@@ -1,0 +1,6 @@
+*.d
+*.o
+avp.bin
+avp.elf
+config.h
+config.mk

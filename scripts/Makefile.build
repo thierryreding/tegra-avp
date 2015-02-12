@@ -1,36 +1,44 @@
-include $(obj)/Makefile
+src := $(obj)
 
-objs = $(addprefix $(obj),$(filter-out %/,$(obj-y)))
+PHONY := all
+all:
+
+include scripts/Kbuild.include
+include scripts/Makefile.lib
+include $(objtree)/config.mk
+
+kbuild-dir := $(if $(filter /%,$(src)),$(src),$(srctree)/$(src))
+include $(kbuild-dir)/Makefile
+
+objs = $(addprefix $(obj)/,$(filter-out %/,$(obj-y)))
 deps = $(patsubst %.o,%.d,$(objs))
-subdirs = $(addprefix $(obj),$(filter %/,$(obj-y)))
-subdir-objs = $(addsuffix built-in.o,$(subdirs))
+subdirs = $(addprefix $(obj)/,$(patsubst %/,%,$(filter %/,$(obj-y))))
+subdir-objs = $(patsubst %,%/built-in.o,$(subdirs))
 
-$(obj)built-in.o: $(objs) $(subdir-objs)
-	@echo "  LD      $@"
-	@$(LD) $(LDFLAGS) -r -o $@ $(objs) $(subdir-objs)
+quiet_cmd_link_o_target = LD      $@
+      cmd_link_o_target = $(LD) $(LDFLAGS) -r -o $@ $^
 
-$(obj)%.o: $(obj)%.c
-	@echo "  CC      $@"
-	@$(CC) $(CFLAGS) -o $@ -c $<
+PHONY += $(obj)/built-in.o
+$(obj)/built-in.o: $(objs) $(subdir-objs)
+	$(call cmd,link_o_target)
 
-$(obj)%.o: $(obj)%.S
-	@echo "  AS      $@"
-	@$(CC) $(CFLAGS) -o $@ -c $<
+$(obj)/%.o: $(obj)/%.c
+	$(call cmd,cc_o_c)
 
-$(obj)%.d: $(obj)%.c
-	@$(CC) $(CFLAGS) -MM $< > $@
+$(obj)/%.o: $(obj)/%.S
+	$(call cmd,as_o_S)
 
--include $(deps)
-
+PHONY += $(subdir-objs)
 $(subdir-objs): %/built-in.o:
-	@$(MAKE) -f scripts/Makefile.build obj=$*/
+	$(Q)$(MAKE) $(build)=$*
 
-$(addprefix clean-,$(subdirs)): clean-%:
-	@$(MAKE) -f scripts/Makefile.build obj=$* clean
+ifneq ($(deps),)
+  -include $(deps)
+endif
 
-clean-files = $(objs) $(obj)built-in.o $(deps)
+all: $(obj)/built-in.o
 
-clean: $(addprefix clean-,$(subdirs))
-	rm -f $(clean-files)
+PHONY += FORCE
+FORCE:
 
-.PHONY: $(subdir-objs)
+.PHONY: $(PHONY)

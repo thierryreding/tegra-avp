@@ -1,0 +1,7 @@
+quiet_cmd_cc_o_c = CC      $@
+      cmd_cc_o_c = $(CC) $(CFLAGS) -MD -o $@ -c $<
+
+quiet_cmd_as_o_S = AS      $@
+      cmd_as_o_S = $(CC) $(CFLAGS) -MD -o $@ -c $<
+
+# vim: ft=make
