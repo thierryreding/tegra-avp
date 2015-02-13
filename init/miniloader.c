@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <irq.h>
 #include <stdbool.h>
 #include <types.h>
 
@@ -113,18 +114,9 @@ void car_apply(void)
 	*/
 }
 
-void do_irq(void)
-{
-	uart_puts(debug, "IRQ\n");
-}
-
-void do_fiq(void)
-{
-	uart_puts(debug, "FIQ\n");
-}
-
 void start(void)
 {
+	irq_init();
 	pinmux_apply();
 	car_apply();
 

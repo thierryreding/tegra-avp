@@ -63,6 +63,7 @@ CFLAGS += -Wall -Werror
 export AS AFLAGS CC CFLAGS LD LDFLAGS
 
 obj-y += arch/
+obj-y += core/
 obj-y += drivers/
 obj-y += lib/
 obj-y += init/

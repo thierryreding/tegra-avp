@@ -2,6 +2,17 @@
  * Uses the AVP to switch on LED1 on Beaver.
  */
 
+#include <avp/iomap.h>
+
+#define EVP_COP_RESET_VECTOR          0x200
+#define EVP_COP_UNDEF_VECTOR          0x204
+#define EVP_COP_SWI_VECTOR            0x208
+#define EVP_COP_PREFETCH_ABORT_VECTOR 0x20c
+#define EVP_COP_DATA_ABORT_VECTOR     0x210
+#define EVP_COP_RSVD_VECTOR           0x214
+#define EVP_COP_IRQ_VECTOR            0x218
+#define EVP_COP_FIQ_VECTOR            0x21c
+
 .globl _start
 _start:
 	b	reset
@@ -14,8 +25,6 @@ _start:
 	b	fiq
 
 .balignl 16, 0xdeadbeef
-
-#define TEGRA_IRAM_BASE 0x40000000
 
 reset:
 	mrs r0, cpsr
@@ -33,6 +42,8 @@ reset:
 	ldr sp, =TEGRA_IRAM_BASE
 	add sp, #256 << 10
 	sub sp, #4 << 10
+
+	bl setup_vectors
 
 	/* enable interrupts */
 	mrs r0, cpsr
@@ -92,3 +103,31 @@ irq:
 
 fiq:
 	bl do_fiq
+
+setup_vectors:
+	/* setup vectors */
+	ldr r0, =TEGRA_EVP_BASE
+
+	ldr r1, =reset
+	str r1, [r0, #EVP_COP_RESET_VECTOR]
+
+	ldr r1, =undefined_instruction
+	str r1, [r0, #EVP_COP_UNDEF_VECTOR]
+
+	ldr r1, =software_interrupt
+	str r1, [r0, #EVP_COP_SWI_VECTOR]
+
+	ldr r1, =prefetch_abort
+	str r1, [r0, #EVP_COP_PREFETCH_ABORT_VECTOR]
+
+	ldr r1, =data_abort
+	str r1, [r0, #EVP_COP_DATA_ABORT_VECTOR]
+
+	ldr r1, =not_used
+	str r1, [r0, #EVP_COP_RSVD_VECTOR]
+
+	ldr r1, =irq
+	str r1, [r0, #EVP_COP_IRQ_VECTOR]
+
+	ldr r1, =fiq
+	str r1, [r0, #EVP_COP_FIQ_VECTOR]

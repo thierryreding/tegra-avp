@@ -1,4 +1,5 @@
 obj-y += car.o
+obj-y += intc.o
 obj-y += pinmux.o
 obj-y += pmc.o
 obj-y += timer.o
