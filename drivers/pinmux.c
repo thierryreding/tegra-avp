@@ -2,14 +2,10 @@
 #include <avp/iomap.h>
 #include <avp/pinmux.h>
 
-void pinmux_init(struct pinmux *pinmux)
-{
-}
-
 void pinmux_config_apply(struct pinmux *pinmux,
 			 const struct pinmux_config *config)
 {
-	unsigned long value;
+	uint32_t value;
 
 	value = config->ioreset << 8 | config->lock << 7 |
 		config->open_drain << 6 | config->input << 5 |

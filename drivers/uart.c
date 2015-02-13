@@ -2,8 +2,10 @@
 #include <stdarg.h>
 #include <stdio.h>
 
+#include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
+#include <avp/timer.h>
 #include <avp/uart.h>
 
 #define UART_THR 0x00
@@ -33,7 +35,7 @@
 
 void uart_init(struct uart *uart)
 {
-	unsigned long rate = 408000000; /* XXX determine at runtime */
+	unsigned long rate = clk_get_rate(&clk_pllp);
 	unsigned int divisor;
 	uint8_t dll, dlh;
 
@@ -41,22 +43,25 @@ void uart_init(struct uart *uart)
 	dll = (divisor >> 0) & 0xff;
 	dlh = (divisor >> 8) & 0xff;
 
+	/* disable interrupts */
 	writel(0x00, uart->base + UART_IER);
-	/* BKSE, 8 data, no parity, 1 stop bits */
+
+	/* reset divisor */
 	writel(0x83, uart->base + UART_LCR);
 	writel(0x00, uart->base + UART_DLL);
 	writel(0x00, uart->base + UART_DLH);
-	/* 8 data, no parity, 1 stop bits */
 	writel(0x03, uart->base + UART_LCR);
+
 	/* RTS, DTR */
 	writel(0x03, uart->base + UART_MCR);
+
 	/* enable FIFO, clear receive and transmit FIFOs */
 	writel(0x07, uart->base + UART_FCR);
-	/* BKSE, 8 data, no parity, 1 stop bits */
+
+	/* program divisor, 8 data, no parity, 1 stop bits */
 	writel(0x83, uart->base + UART_LCR);
 	writel(dll, uart->base + UART_DLL);
 	writel(dlh, uart->base + UART_DLH);
-	/* 8 data, no parity, 1 stop bits */
 	writel(0x03, uart->base + UART_LCR);
 
 	/* send NUL byte */
@@ -157,7 +162,18 @@ void uart_flush(struct uart *uart)
 		if (value & UART_LSR_TMTY)
 			break;
 	}
+
+	/*
+	 * This seems to be necessary on Tegra114 to make sure the FIFO is
+	 * completely flushed.
+	 */
+	udelay(1000);
 }
+
+struct uart uarta = {
+	.base = TEGRA_UARTA_BASE,
+	.baud = 115200,
+};
 
 struct uart uartd = {
 	.base = TEGRA_UARTD_BASE,

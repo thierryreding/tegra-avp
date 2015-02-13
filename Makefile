@@ -45,12 +45,12 @@ OBJCOPY = $(CROSS_COMPILE)objcopy
 AS = $(CROSS_COMPILE)as
 AFLAGS = -marm -march=armv4t -mcpu=arm720t -g
 CC = $(CROSS_COMPILE)gcc
+CPP = $(CC) -E
 NOSTDINC_FLAGS = -nostdinc -isystem $(shell $(CC) -print-file-name=include)
-CFLAGS = $(NOSTDINC_FLAGS) -I include -marm -march=armv4t -mcpu=arm720t
+CPPFLAGS = $(NOSTDINC_FLAGS) -include config.h
+CFLAGS = $(CPPFLAGS) -I include -marm -march=armv4t -mcpu=arm720t
 LD = $(CROSS_COMPILE)ld
 LDFLAGS = -nostdlib
-
-CFLAGS += -include config.h
 
 ifneq ($(CONFIG_DEBUG),)
   CFLAGS += -O0 -ggdb
@@ -75,10 +75,19 @@ targets :=
 PHONY += all
 _all: all
 
-quiet_cmd_link_avp = LD      $@
-      cmd_link_avp = $(LD) $(LDFLAGS) -T avp.ld $(objs) -o $@
+quiet_cmd_cpp_lds_S = LDS     $@
+      cmd_cpp_lds_S = $(CPP) $(CPPFLAGS) -P -C -MD -MF $@.d -MT $@ -o $@ $<
 
-avp.elf: $(objs) avp.ld
+%.lds: %.lds.S
+	$(call cmd,cpp_lds_S)
+
+targets += avp.lds
+deps += avp.lds.d
+
+quiet_cmd_link_avp = LD      $@
+      cmd_link_avp = $(LD) $(LDFLAGS) -T avp.lds $(objs) -o $@
+
+avp.elf: $(objs) avp.lds
 	$(call cmd,link_avp)
 
 targets += avp.elf
@@ -108,6 +117,10 @@ quiet_cmd_rmfiles = CLEAN $(rm-files)
 clean: rm-files = $(strip $(targets))
 clean: $(clean-dirs)
 	$(call cmd,rmfiles)
+
+ifneq ($(deps),)
+  -include $(deps)
+endif
 
 PHONY += FORCE
 FORCE:

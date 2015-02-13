@@ -1,7 +1,7 @@
 ENTRY(_start)
 SECTIONS
 {
-	. = 0x4000e000;
+	. = CONFIG_TEXT_BASE;
 
 	.text : {
 		*(.text)

@@ -35,12 +35,12 @@ reset:
 	/* setup IRQ stack pointer */
 	msr cpsr, #(0x12 | 0x80 | 0x40)
 	ldr sp, =TEGRA_IRAM_BASE
-	add sp, #256 << 10
+	add sp, #TEGRA_IRAM_SIZE
 
 	/* setup SYS stack pointer */
 	msr cpsr, #(0x1f | 0x80 | 0x40)
 	ldr sp, =TEGRA_IRAM_BASE
-	add sp, #256 << 10
+	add sp, #TEGRA_IRAM_SIZE
 	sub sp, #4 << 10
 
 	bl setup_vectors

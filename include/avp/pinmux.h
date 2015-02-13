@@ -5,10 +5,6 @@ struct pinmux {
 	unsigned long base;
 };
 
-void pinmux_init(struct pinmux *pinmux);
-
-extern struct pinmux pinmux;
-
 struct pinmux_config {
 	unsigned int offset;
 	unsigned int function;
@@ -62,5 +58,7 @@ void pinmux_config_apply(struct pinmux *pinmux,
 		.lock = PINMUX_LOCK_##_lock,					\
 		.ioreset = PINMUX_IORESET_DISABLE,				\
 	}
+
+extern struct pinmux pinmux;
 
 #endif

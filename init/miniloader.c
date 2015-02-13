@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <types.h>
 
-#include <avp/car.h>
+#include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
 #include <avp/pinmux.h>
@@ -89,23 +89,17 @@ void pinmux_apply(void)
 {
 	unsigned int i;
 
-	pinmux_init(&pinmux);
-
 	for (i = 0; i < ARRAY_SIZE(pinmux_configs); i++)
 		pinmux_config_apply(&pinmux, &pinmux_configs[i]);
 }
 
 void car_apply(void)
 {
-	struct car car;
-
-	car_init(&car, TEGRA_CLK_RST_BASE);
-
 	/* use pll_p_out0 as source */
-	clk_periph_set_source(&car, &clk_uartd, 0);
-	clk_periph_enable(&car, &clk_uartd);
-	reset_assert(&car, &rst_uartd);
-	reset_deassert(&car, &rst_uartd);
+	clk_periph_set_source(&clk_uartd, 0);
+	clk_periph_enable(&clk_uartd);
+	reset_assert(&rst_uartd);
+	reset_deassert(&rst_uartd);
 
 	/*
 	clk_periph_enable(&car, &clk_usbd);
@@ -116,7 +110,7 @@ void car_apply(void)
 
 void start(void)
 {
-	irq_init();
+	//irq_init();
 	pinmux_apply();
 	car_apply();
 

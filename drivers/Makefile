@@ -1,4 +1,6 @@
-obj-y += car.o
+obj-y += clk-rst.o
+obj-$(CONFIG_TEGRA114) += clk-rst-tegra114.o
+obj-$(CONFIG_TEGRA124) += clk-rst-tegra124.o
 obj-y += intc.o
 obj-y += pinmux.o
 obj-y += pmc.o
