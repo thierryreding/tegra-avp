@@ -1366,7 +1366,7 @@ void usb_init(struct usb *usb)
 		unsigned long base = TEGRA_CLK_RST_BASE;
 		uint32_t value;
 
-#if 0
+#if 1
 		value = readl(base + 0x19c);
 		uart_printf(debug, "CLK_SOURCE_EMC: %08x\n", value);
 		value &= ~0x7 << 29;
@@ -1692,8 +1692,10 @@ void usb_init(struct usb *usb)
 		uint32_t *ptr = (uint32_t *)bootloader;
 		unsigned int i;
 
+		/*
 		for (i = 0; i < 16; i++)
 			ptr[i] = 0xaa551100;
+		*/
 
 		for (i = 0; i < 16; i++)
 			uart_printf(debug, "  %p: %08x\n", &ptr[i], ptr[i]);
