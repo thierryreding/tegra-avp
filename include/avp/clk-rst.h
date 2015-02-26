@@ -49,9 +49,13 @@ extern const struct clk_rst clk_rst;
 extern const struct clk clk_pllp;
 
 extern const struct clk_periph clk_usbd;
+extern const struct clk_periph clk_mc;
+extern const struct clk_periph clk_emc;
 extern const struct clk_periph clk_uartd;
 
 extern const struct reset rst_usbd;
+extern const struct reset rst_mc;
+extern const struct reset rst_emc;
 extern const struct reset rst_uartd;
 
 #endif

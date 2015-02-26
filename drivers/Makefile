@@ -4,6 +4,7 @@ obj-$(CONFIG_TEGRA124) += clk-rst-tegra124.o
 obj-y += intc.o
 obj-y += pinmux.o
 obj-y += pmc.o
+obj-y += sdram.o
 obj-y += timer.o
 obj-y += uart.o
 obj-y += usb.o

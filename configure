@@ -11,7 +11,7 @@ usage()
 }
 
 text_base=0x4000e000
-soc=tegra114
+soc=tegra124
 debug=yes
 
 while test $# -gt 0; do

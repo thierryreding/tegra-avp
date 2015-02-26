@@ -50,6 +50,26 @@ const struct clk_periph clk_usbd = {
 	.src = 0x000,
 };
 
+const struct clk_periph clk_mc = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x328,
+	.clr = 0x32c,
+	.bit = 0,
+	.src = 0x000,
+};
+
+const struct clk_periph clk_emc = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x328,
+	.clr = 0x32c,
+	.bit = 25,
+	.src = 0x000,
+};
+
 const struct clk_periph clk_uartd = {
 	.base = {
 		.clk_rst = &clk_rst,
@@ -65,6 +85,20 @@ const struct reset rst_usbd = {
 	.set = 0x300,
 	.clr = 0x304,
 	.bit = 22,
+};
+
+const struct reset rst_mc = {
+	.clk_rst = &clk_rst,
+	.set = 0x308,
+	.clr = 0x30c,
+	.bit = 0,
+};
+
+const struct reset rst_emc = {
+	.clk_rst = &clk_rst,
+	.set = 0x308,
+	.clr = 0x30c,
+	.bit = 25,
 };
 
 const struct reset rst_uartd = {

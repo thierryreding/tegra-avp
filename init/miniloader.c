@@ -8,6 +8,7 @@
 #include <avp/iomap.h>
 #include <avp/pinmux.h>
 #include <avp/pmc.h>
+#include <avp/timer.h>
 #include <avp/uart.h>
 #include <avp/usb.h>
 
@@ -108,46 +109,25 @@ void car_apply(void)
 	*/
 }
 
+#define RELEASE "2015.02-wip"
+
 void start(void)
 {
+	/* this seems to fix memory corruption seen during USB transfers */
+	if (1) {
+		uint32_t value;
+
+		value = readl(0x6000c000 + 0x000);
+		value |= 1 << 4;
+		writel(value, 0x6000c000 + 0x000);
+	}
+
 	//irq_init();
 	pinmux_apply();
 	car_apply();
 
 	uart_init(debug);
-	uart_puts(debug, "AVP\n");
-	uart_printf(debug, "%s\n", "foo");
-
-	uart_printf(debug, "setting up ARC...\n");
-	if (1) {
-		uint32_t value;
-
-		value = readl(TEGRA_CLK_RST_BASE + 0x3a4);
-		value |= 1 << 19;
-		writel(value, TEGRA_CLK_RST_BASE + 0x3a4);
-
-		value = readl(TEGRA_CLK_RST_BASE + 0x014);
-		value |= 1 << 25;
-		writel(value, TEGRA_CLK_RST_BASE + 0x014);
-
-#define TEGRA_MC_BASE 0x70019000
-
-		/*
-		value = readl(TEGRA_MC_BASE + 0x964);
-		uart_printf(debug, "IRAM_CTRL: %08x\n", value);
-		value &= ~(1 << 0);
-		writel(value, TEGRA_MC_BASE + 0x964);
-		*/
-
-		/*
-		value = readl(TEGRA_MC_BASE + 0x65c);
-		uart_printf(debug, "IRAM_BOM: %08x\n", value);
-
-		value = readl(TEGRA_MC_BASE + 0x660);
-		uart_printf(debug, "IRAM_TOM: %08x\n", value);
-		*/
-	}
-	uart_printf(debug, "done\n");
+	uart_puts(debug, "AVP " RELEASE "\n");
 
 	usb_init(&usbd);
 
