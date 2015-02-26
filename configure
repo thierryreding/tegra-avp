@@ -7,14 +7,20 @@ usage()
 	echo "options:"
 	echo "  --help, -h   display help information and exit"
 	echo "  --release    build release version"
+	echo "  --soc SOC    build for the given SoC"
+	echo "               (must be one of: tegra114, tegra124, tegra132)"
 	echo "  --debug      build debug version"
 }
 
-text_base=0x4000e000
 soc=tegra124
 debug=yes
 
 while test $# -gt 0; do
+	if test -n "$prev"; then
+		eval "$prev=$1"; prev=
+		shift; continue
+	fi
+
 	case $1 in
 		--help | -h)
 			usage $0
@@ -23,6 +29,11 @@ while test $# -gt 0; do
 
 		--release)
 			debug=no
+			shift
+			;;
+
+		--soc)
+			prev=soc
 			shift
 			;;
 
@@ -37,6 +48,25 @@ while test $# -gt 0; do
 			;;
 	esac
 done
+
+case $soc in
+	tegra114)
+		text_base=0x4000e000
+		;;
+
+	tegra124)
+		text_base=0x4000e000
+		;;
+
+	tegra132)
+		text_base=0x4000f000
+		;;
+
+	*)
+		echo "unsupported SoC: $soc"
+		exit 1
+		;;
+esac
 
 exec 3> "config.mk"
 
