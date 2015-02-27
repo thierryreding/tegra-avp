@@ -1198,46 +1198,6 @@ static void nv3p_process(struct usb_ep *ep)
 			payload = (void *)command->load;
 			payload_length = command->size;
 			bootloader = (void (*)(void))command->entry;
-
-			if (1) {
-				uint32_t value = readl(TEGRA_PMC_BASE + PMC_STRAPPING_OPT_A);
-				unsigned int index;
-
-				uart_printf(debug, "    strapping: %08x\n", value);
-				uart_printf(debug, "      RAM code: %02x\n", (value >> 4) & 0xf);
-				uart_printf(debug, "      SDRAM: %02x\n", (value >> 4) & 0x3);
-
-				index = (value >> 4) & 0x3;
-
-				sdram_init(&bct->sdram_params[index]);
-
-				if (1) {
-					uint32_t *ptr = (uint32_t *)0x80000000;
-					unsigned int i;
-
-					uart_printf(debug, "memory: %p\n", ptr);
-
-					for (i = 0; i < 16; i++)
-						uart_printf(debug, "  %08x\n", ptr[i]);
-
-					uart_printf(debug, "clearing: %p\n", ptr);
-
-					for (i = 0; i < 16; i++)
-						ptr[i] = 0xaa551100;
-
-					uart_printf(debug, "memory: %p\n", ptr);
-
-					for (i = 0; i < 16; i++)
-						uart_printf(debug, "  %08x\n", ptr[i]);
-					/*
-					uart_hexdump(debug, ptr, 64, 16, true);
-					uart_printf(debug, "  cleaning RAM...\n");
-					memset(ptr, 0, 64);
-					uart_printf(debug, "  done\n");
-					uart_hexdump(debug, ptr, 64, 16, true);
-					*/
-				}
-			}
 		}
 	}
 
@@ -1307,6 +1267,73 @@ static void nv3p_process(struct usb_ep *ep)
 			for (i = 0; i < sizeof(*bct) / 4; i++) {
 				if (ptr[i] != i)
 					uart_printf(debug, "  corruption @%04x: %p: %08x\n", i, &ptr[i], ptr[i]);
+			}
+		}
+
+		if (payload == bct) {
+			uint32_t value = readl(TEGRA_PMC_BASE + PMC_STRAPPING_OPT_A);
+			unsigned int index;
+
+			uart_printf(debug, "    strapping: %08x\n", value);
+			uart_printf(debug, "      RAM code: %02x\n", (value >> 4) & 0xf);
+			uart_printf(debug, "      SDRAM: %02x\n", (value >> 4) & 0x3);
+
+			index = (value >> 4) & 0x3;
+
+			sdram_init(&bct->sdram_params[index]);
+
+			if (0) {
+				uint32_t *ptr = (uint32_t *)0x80000000;
+				unsigned int i;
+
+				uart_printf(debug, "memory: %p\n", ptr);
+
+				for (i = 0; i < 16; i++)
+					uart_printf(debug, "  %08x\n", ptr[i]);
+
+				uart_printf(debug, "clearing: %p\n", ptr);
+
+				for (i = 0; i < 16; i++)
+					ptr[i] = 0xaa551100;
+
+				uart_printf(debug, "memory: %p\n", ptr);
+
+				for (i = 0; i < 16; i++)
+					uart_printf(debug, "  %08x\n", ptr[i]);
+				/*
+				uart_hexdump(debug, ptr, 64, 16, true);
+				uart_printf(debug, "  cleaning RAM...\n");
+				memset(ptr, 0, 64);
+				uart_printf(debug, "  done\n");
+				uart_hexdump(debug, ptr, 64, 16, true);
+				*/
+			}
+
+			if (1) {
+				uint32_t *ptr = (uint32_t *)0x80000000;
+				size_t size = 0x80000000;
+				unsigned int i;
+
+				uart_printf(debug, "writing memory %p-%p...\n", ptr, (void *)ptr + size - 1);
+
+				for (i = 0; i < size / 4; i++) {
+					if ((i % (1024 * 1024)) == 0)
+						uart_printf(debug, "\r  %p...", &ptr[i]);
+
+					ptr[i] = 0xaa551100;
+				}
+
+				uart_printf(debug, "done\n");
+
+				uart_printf(debug, "validating memory %p-%p...\n", ptr, (void *)ptr + size - 1);
+
+				for (i = 0; i < size / 4; i++) {
+					if ((i % (1024 * 1024)) == 0)
+						uart_printf(debug, "  %p\n", &ptr[i]);
+
+					if (ptr[i] != 0xaa551100)
+						uart_printf(debug, "  %p: %08x\n", &ptr[i], ptr[i]);
+				}
 			}
 		}
 
