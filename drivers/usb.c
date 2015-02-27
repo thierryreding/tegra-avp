@@ -812,6 +812,7 @@ static struct usb_ep *usb_ep_get(unsigned int index)
 #define NV3P_PACKET_TYPE_COMMAND 0x01
 #define NV3P_PACKET_TYPE_DATA 0x02
 #define NV3P_PACKET_TYPE_ACK 0x04
+#define NV3P_PACKET_TYPE_NAK 0x05
 
 #define NV3P_COMMAND_GET_PLATFORM_INFO 0x01
 #define NV3P_COMMAND_DOWNLOAD_BCT 0x04
@@ -853,6 +854,16 @@ struct nv3p_packet_download_bootloader {
 
 struct nv3p_packet_ack {
 	struct nv3p_header header;
+	uint32_t checksum;
+};
+
+#define NV3P_NAK_SUCCESS  0x00000001
+#define NV3P_NAK_BAD_CMD  0x00000002
+#define NV3P_NAK_BAD_DATA 0x00000003
+
+struct nv3p_packet_nak {
+	struct nv3p_header header;
+	uint32_t error;
 	uint32_t checksum;
 };
 
@@ -988,6 +999,59 @@ static int usb_irq(unsigned int irq, void *data)
 
 	return IRQ_HANDLED;
 }
+
+static void nv3p_checksum_init(uint32_t *checksum)
+{
+	*checksum = 0;
+}
+
+static void nv3p_checksum_update(uint32_t *checksum, const void *buffer, size_t size)
+{
+	const uint8_t *ptr = buffer;
+	size_t i;
+
+	for (i = 0; i < size; i++)
+		*checksum += ptr[i];
+}
+
+static uint32_t nv3p_checksum_done(uint32_t *checksum)
+{
+	*checksum = ~(*checksum) + 1;
+
+	return *checksum;
+}
+
+#if 0
+static void nv3p_send_nak(uint32_t sequence, uint32_t error)
+{
+	struct nv3p_packet_nak *nak = (struct nv3p_packet_nak *)send;
+	uint32_t checksum;
+
+	nv3p_checksum_init(&checksum);
+
+	memset(nak, 0, sizeof(*nak));
+	nak->header.version = NV3P_VERSION;
+	nak->header.type = NV3P_PACKET_TYPE_NAK;
+	nak->header.sequence = sequence;
+	nak->error = error;
+
+	nv3p_checksum_update(&checksum, nak, sizeof(*nak));
+	nak->checksum = nv3p_checksum_done(&checksum);
+
+#if 0
+	uart_printf(debug, "  nak packet:\n");
+	uart_printf(debug, "    header:\n");
+	uart_printf(debug, "      version: %08x\n", nak->header.version);
+	uart_printf(debug, "      type: %08x\n", nak->header.type);
+	uart_printf(debug, "      sequence: %08x\n", nak->header.sequence);
+	uart_printf(debug, "    error: %08x\n", nak->error);
+	uart_printf(debug, "    checksum: %08x\n", nak->checksum);
+#endif
+
+	usb_ep_send(&ep_bulk_in, nak, sizeof(*nak));
+	usb_ep_wait(&ep_bulk_in);
+}
+#endif
 
 static void nv3p_send_ack(uint32_t sequence)
 {
@@ -1204,11 +1268,15 @@ static void nv3p_process(struct usb_ep *ep)
 	if (header->type == NV3P_PACKET_TYPE_DATA) {
 		struct nv3p_packet_data *data = (struct nv3p_packet_data *)recv;
 		unsigned int length, num, received = 0;
+		uint32_t checksum;
 
 		if (0) {
 			uart_printf(debug, "  data packet:\n");
 			uart_printf(debug, "    length: %u\n", data->length);
 		}
+
+		nv3p_checksum_init(&checksum);
+		nv3p_checksum_update(&checksum, data, sizeof(*data));
 
 		length = data->length;
 
@@ -1235,6 +1303,8 @@ static void nv3p_process(struct usb_ep *ep)
 			if (0)
 				uart_printf(debug, "  received %u bytes\n", num);
 
+			nv3p_checksum_update(&checksum, recv, num);
+
 #ifdef BOUNCE_BUFFER
 			if (0 && payload == bct) {
 				uint32_t *ptr = (uint32_t *)recv;
@@ -1256,7 +1326,11 @@ static void nv3p_process(struct usb_ep *ep)
 			received += num;
 		}
 
+		nv3p_checksum_done(&checksum);
 		payload_length -= received;
+
+		if (payload_length != 0)
+			uart_printf(debug, "%u bytes remaining\n", payload_length);
 
 		if (0 && payload == bct) {
 			uint32_t *ptr = (uint32_t *)bct;
