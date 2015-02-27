@@ -1425,7 +1425,7 @@ void usb_init(struct usb *usb)
 		uart_printf(debug, "value: %08x\n", value);
 
 		/* assume 12 MHz for now */
-		value = (0x00 << 8) | (0x0c << 0);
+		value = (0x00 << 8) | (0x0b << 0);
 		writel(value, 0x60005010 + 0x004);
 
 		value = (0x08 << 28) | (0 << 26) | (0 << 18) | (0 << 12) | (0x01 << 4) | (1 << 0);
