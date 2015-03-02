@@ -1,6 +1,3 @@
-#define writel _writel
-#define readl _readl
-
 #include <avp/bct.h>
 #include <avp/clk-rst.h>
 #include <avp/io.h>
@@ -8,19 +5,6 @@
 #include <avp/sdram.h>
 #include <avp/timer.h>
 #include <avp/uart.h>
-
-#undef writel
-#define writel(value, address) ({					\
-		uart_printf(debug, "%08x < %08x\n", address, value);	\
-		_writel(value, address);				\
-	})
-
-#undef readl
-#define readl(address) ({						\
-		uint32_t value = _readl(address);			\
-		uart_printf(debug, "%08x > %08x\n", address, value);	\
-		value;							\
-	})
 
 /*
  * PMC
@@ -360,8 +344,14 @@ void sdram_init(struct bct_sdram_params *params)
 	unsigned int mc = TEGRA_MC_BASE;
 	uint32_t value;
 
-	uart_printf(debug, "> %s(params=%p)\n", __func__, params);
-	uart_printf(debug, "  memory type: %08x\n", params->memory_type);
+	clk_periph_set_source(&clk_emc, 0x2);
+	clk_periph_enable(&clk_emc);
+	clk_periph_enable(&clk_mc);
+
+	reset_deassert(&rst_emc);
+	reset_deassert(&rst_mc);
+
+	udelay(5);
 
 	writel(params->pmc_vddp_sel, pmc + PMC_VDDP_SEL);
 	udelay(params->pmc_vddp_sel_wait);
@@ -462,7 +452,6 @@ void sdram_init(struct bct_sdram_params *params)
 	writel(params->emc_xm2vttgenpadctrl, emc + EMC_XM2VTTGENPADCTRL);
 	writel(params->emc_xm2vttgenpadctrl2, emc + EMC_XM2VTTGENPADCTRL2);
 	writel(params->emc_xm2vttgenpadctrl3, emc + EMC_XM2VTTGENPADCTRL3);
-	uart_printf(debug, "  EMC_CTT_TERM_CTRL < %08x\n", params->emc_ctt_term_ctrl);
 	writel(params->emc_ctt_term_ctrl, emc + EMC_CTT_TERM_CTRL);
 
 	if (params->emc_bct_spare4) {
@@ -731,7 +720,6 @@ void sdram_init(struct bct_sdram_params *params)
 
 	udelay(params->emc_pin_program_wait);
 
-	uart_printf(debug, "EMC device select: %08x\n", params->emc_dev_select);
 	value = EMC_NOP_DEV_SELECT(params->emc_dev_select) | EMC_NOP_CMD;
 	writel(value, emc + EMC_NOP);
 
@@ -744,7 +732,6 @@ void sdram_init(struct bct_sdram_params *params)
 		if (params->emc_extra_mode_reg_write_enable)
 			writel(params->emc_mrs_extra, emc + EMC_MRS);
 
-		uart_printf(debug, "  emc_zcal_warm_cold_boot_enables: %08x\n", params->emc_zcal_warm_cold_boot_enables);
 		if (params->emc_zcal_warm_cold_boot_enables & 0x1) {
 			writel(params->emc_zcal_init_dev0, emc + EMC_ZQ_CAL);
 			udelay(params->emc_zcal_init_wait);
@@ -754,7 +741,6 @@ void sdram_init(struct bct_sdram_params *params)
 				udelay(params->emc_zcal_init_wait);
 			}
 		} else {
-			uart_printf(debug, "emc_zcal_init_wait: %08x\n", params->emc_zcal_init_wait);
 			udelay(params->emc_zcal_init_wait);
 		}
 	}
@@ -764,8 +750,6 @@ void sdram_init(struct bct_sdram_params *params)
 			    params->emc_bct_spare9);
 		writel(params->emc_bct_spare9, params->emc_bct_spare8);
 	}
-
-	uart_printf(debug, "  memory type: %08x\n", params->memory_type);
 
 	if (params->memory_type == BCT_MEMORY_TYPE_LPDDR2 ||
 	    params->memory_type == BCT_MEMORY_TYPE_DDR3) {
@@ -801,7 +785,6 @@ void sdram_init(struct bct_sdram_params *params)
 
 	writel(EMC_TIMING_CONTROL_UPDATE, emc + EMC_TIMING_CONTROL);
 
-	uart_printf(debug, "ARB_XBAR_CTRL: %08x\n", params->arb_xbar_ctrl_mem_init_done);
 	value = readl(arb + ARB_XBAR_CTRL);
 	value |= ARB_XBAR_CTRL_MEM_INIT_DONE;
 	writel(value, arb + ARB_XBAR_CTRL);
@@ -811,8 +794,6 @@ void sdram_init(struct bct_sdram_params *params)
 
 	writel(params->mc_sec_carveout_ctrl, mc + MC_SEC_CARVEOUT_CTRL);
 	writel(params->mc_mts_carveout_ctrl, mc + MC_MTS_CARVEOUT_CTRL);
-
-	uart_printf(debug, "< %s()\n", __func__);
 }
 
 void sdram_test(void)
