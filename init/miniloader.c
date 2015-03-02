@@ -1,5 +1,6 @@
 #include <ctype.h>
 #include <irq.h>
+#include <nv3p.h>
 #include <stdbool.h>
 #include <types.h>
 
@@ -113,6 +114,8 @@ void car_apply(void)
 
 void start(void)
 {
+	struct nv3p nv3p;
+
 	/* this seems to fix memory corruption seen during USB transfers */
 	if (1) {
 		uint32_t value;
@@ -130,6 +133,10 @@ void start(void)
 	uart_puts(debug, "AVP " RELEASE "\n");
 
 	usb_init(&usbd);
+	usb_enumerate(&usbd);
+
+	nv3p_init(&nv3p, &usbd);
+	nv3p_process(&nv3p);
 
 	uart_flush(debug);
 	pmc_reset(&pmc, PMC_RESET_MODE_RCM);

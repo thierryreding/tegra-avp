@@ -1,4 +1,5 @@
 #include <common.h>
+#include <errno.h>
 #include <irq.h>
 #include <string.h>
 #include <usb.h>
@@ -11,6 +12,10 @@
 #include <avp/timer.h>
 #include <avp/uart.h>
 #include <avp/usb.h>
+
+#include <nv3p.h>
+
+#define PMC_STRAPPING_OPT_A 0x64
 
 #define USBCMD 0x130
 #define  USBCMD_ITC(x) ((x) << 16)
@@ -84,21 +89,6 @@
 
 #define USB_PHY_VBUS_SENSORS 0x404
 
-static inline void usb_writel(struct usb *usb, uint32_t value,
-			      unsigned long offset)
-{
-	writel(value, usb->base + offset);
-}
-
-static inline uint32_t usb_readl(struct usb *usb, unsigned long offset)
-{
-	return readl(usb->base + offset);
-}
-
-struct usb usbd = {
-	.base = TEGRA_USBD_BASE,
-};
-
 struct usb_dqh {
 	uint32_t caps;
 	uint32_t current;
@@ -131,6 +121,7 @@ struct usb_dtd {
 #define DTD_INFO_ACTIVE (1 << 7)
 
 /* one dTD (device transfer descriptor) per endpoint */
+static uint8_t bounce[4096] __attribute__((aligned(4096)));
 static struct usb_dtd dtd[4] __attribute__((aligned(32)));
 
 enum {
@@ -156,170 +147,65 @@ struct usb_ep {
 	struct usb_dtd *dtd;
 };
 
-struct usb_ep ep_ctrl_out = {
-	.usb = &usbd,
-	.index = 0,
-	.direction = OUT,
-	.type = CTRL,
-	.dtd = &dtd[0],
+struct usb {
+	unsigned long base;
+
+	struct usb_ep ep_ctrl_out;
+	struct usb_ep ep_ctrl_in;
+	struct usb_ep ep_bulk_out;
+	struct usb_ep ep_bulk_in;
 };
 
-struct usb_ep ep_ctrl_in = {
-	.usb = &usbd,
-	.index = 0,
-	.direction = IN,
-	.type = CTRL,
-	.dtd = &dtd[1],
+static inline void usb_writel(struct usb *usb, uint32_t value,
+			      unsigned long offset)
+{
+	writel(value, usb->base + offset);
+}
+
+static inline uint32_t usb_readl(struct usb *usb, unsigned long offset)
+{
+	return readl(usb->base + offset);
+}
+
+struct usb usbd = {
+	.base = TEGRA_USBD_BASE,
+
+	.ep_ctrl_out = {
+		.usb = &usbd,
+		.index = 0,
+		.direction = OUT,
+		.type = CTRL,
+		.dtd = &dtd[0],
+	},
+	.ep_ctrl_in = {
+		.usb = &usbd,
+		.index = 0,
+		.direction = IN,
+		.type = CTRL,
+		.dtd = &dtd[1],
+	},
+	.ep_bulk_out = {
+		.usb = &usbd,
+		.index = 1,
+		.direction = OUT,
+		.type = BULK,
+		.dtd = &dtd[2],
+	},
+	.ep_bulk_in = {
+		.usb = &usbd,
+		.index = 1,
+		.direction = IN,
+		.type = BULK,
+		.dtd = &dtd[3],
+	},
 };
-
-struct usb_ep ep_bulk_out = {
-	.usb = &usbd,
-	.index = 1,
-	.direction = OUT,
-	.type = BULK,
-	.dtd = &dtd[2],
-};
-
-struct usb_ep ep_bulk_in = {
-	.usb = &usbd,
-	.index = 1,
-	.direction = IN,
-	.type = BULK,
-	.dtd = &dtd[3],
-};
-
-static uint32_t usb_ep_mask(struct usb_ep *ep)
-{
-	uint32_t value = (ep->direction == IN) ? 0x00010000 : 0x00000001;
-
-	return value << ep->index;
-}
-
-static void usb_ep_setup(struct usb_ep *ep)
-{
-	uint32_t caps, value;
-	unsigned int dqh;
-
-	dqh = 0x1000 + (ep->index * 2 + ep->direction) * 0x40;
-	ep->dqh = (struct usb_dqh *)(ep->usb->base + dqh);
-
-	/*
-	uart_printf(debug, "ep: %u %s dqh: %p\n", ep->index,
-		    (ep->direction == IN) ? "IN" : "OUT", ep->dqh);
-	*/
-
-	switch (ep->type) {
-	case CTRL:
-		if (ep->direction == OUT)
-			caps = DQH_CAPS_IOC;
-
-		ep->max_pkt_len = 64;
-		break;
-
-	case BULK:
-		caps = DQH_CAPS_ZLT;
-
-		/* TODO: parameterize based on speed */
-		ep->max_pkt_len = 512;
-		break;
-
-	default:
-		uart_printf(debug, "unsupported endpoint type: %u\n", ep->type);
-		return;
-	}
-
-	memset(ep->dqh, 0, sizeof(*ep->dqh));
-	ep->dqh->caps = DQH_CAPS_MAX_PKT_LEN(ep->max_pkt_len) | caps;
-
-	if (ep->type == CTRL) {
-		ep->dqh->next = DQH_NEXT_TERMINATE;
-	} else {
-		ep->dqh->next = DQH_NEXT_TERMINATE;
-	}
-
-	value = usb_readl(ep->usb, ENDPTCTRL(ep->index));
-
-	if (ep->direction == OUT) {
-		value &= ~ENDPTCTRL_RXT_MASK;
-		value &= ~ENDPTCTRL_RXS;
-
-		if (ep->type == CTRL)
-			value |= ENDPTCTRL_RXT_CTRL;
-		else
-			value |= ENDPTCTRL_RXT_BULK;
-
-		value |= ENDPTCTRL_RXE;
-	} else {
-		value &= ~ENDPTCTRL_TXT_MASK;
-		value &= ~ENDPTCTRL_TXS;
-
-		if (ep->type == CTRL)
-			value |= ENDPTCTRL_TXT_CTRL;
-		else
-			value |= ENDPTCTRL_TXT_BULK;
-
-		value |= ENDPTCTRL_TXE;
-	}
-
-	usb_writel(ep->usb, value, ENDPTCTRL(ep->index));
-}
-
-static void usb_ep_flush(struct usb_ep *ep)
-{
-	uint32_t mask = usb_ep_mask(ep);
-	uint32_t value;
-
-	//uart_printf(debug, "> %s(ep=%p)\n", __func__, ep);
-	//uart_printf(debug, "  mask: %08x\n", mask);
-
-	usb_writel(ep->usb, mask, ENDPTFLUSH);
-
-	while (true) {
-		value = usb_readl(ep->usb, ENDPTFLUSH);
-		if ((value & mask) == 0)
-			break;
-	}
-
-	while (true) {
-		value = usb_readl(ep->usb, ENDPTSTATUS);
-		if ((value & mask) == 0)
-			break;
-	}
-
-	while (true) {
-		value = usb_readl(ep->usb, ENDPTPRIME);
-		if ((value & mask) == 0)
-			break;
-	}
-
-	memset(ep->dqh, 0, sizeof(*ep->dqh));
-	memset(ep->dtd, 0, sizeof(*ep->dtd));
-
-	usb_writel(ep->usb, mask, ENDPTCOMPLETE);
-
-	//uart_printf(debug, "< %s()\n", __func__);
-}
-
-static void usb_ep_prime(struct usb_ep *ep)
-{
-	uint32_t mask = usb_ep_mask(ep), value;
-
-	//uart_printf(debug, "priming: %08x\n", mask);
-	usb_writel(ep->usb, mask, ENDPTPRIME);
-
-	while (true) {
-		value = usb_readl(ep->usb, ENDPTPRIME);
-		if ((value & mask) == 0)
-			break;
-	}
-}
 
 static uint8_t recv[4096] __attribute__((aligned(32)));
 static uint8_t send[4096] __attribute__((aligned(32)));
-static struct bit *bit = (struct bit *)TEGRA_IRAM_BASE;
 static void (*bootloader)(void) = NULL;
 static struct bct _bct __attribute__((aligned(32)));
 static struct bct *bct = &_bct;
+static uint32_t bct_csum = 0;
 
 #define USB_LANGUAGE_ID 0x00
 #define USB_MANUFACTURER_ID 0x01
@@ -428,71 +314,124 @@ static struct usb_configuration configuration __attribute__((aligned(32))) = {
 	},
 };
 
-#if 0
-static void usb_ep_ack(struct usb_ep *ep)
+static uint32_t usb_ep_mask(struct usb_ep *ep)
 {
-	struct usb_dqh *dqh = (struct usb_dqh *)(ep->usb->base + ep->qh);
+	uint32_t value = (ep->direction == IN) ? 0x00010000 : 0x00000001;
+
+	return value << ep->index;
+}
+
+static void usb_ep_setup(struct usb_ep *ep)
+{
+	uint32_t caps, value;
+	unsigned int dqh;
+
+	dqh = 0x1000 + (ep->index * 2 + ep->direction) * 0x40;
+	ep->dqh = (struct usb_dqh *)(ep->usb->base + dqh);
+
+	switch (ep->type) {
+	case CTRL:
+		if (ep->direction == OUT)
+			caps = DQH_CAPS_IOC;
+
+		ep->max_pkt_len = 64;
+		break;
+
+	case BULK:
+		caps = DQH_CAPS_ZLT;
+
+		/* TODO: parameterize based on speed */
+		ep->max_pkt_len = 512;
+		break;
+
+	default:
+		uart_printf(debug, "unsupported endpoint type: %u\n", ep->type);
+		return;
+	}
+
+	memset(ep->dqh, 0, sizeof(*ep->dqh));
+	ep->dqh->caps = DQH_CAPS_MAX_PKT_LEN(ep->max_pkt_len) | caps;
+
+	if (ep->type == CTRL) {
+		ep->dqh->next = DQH_NEXT_TERMINATE;
+	} else {
+		ep->dqh->next = DQH_NEXT_TERMINATE;
+	}
+
+	value = usb_readl(ep->usb, ENDPTCTRL(ep->index));
+
+	if (ep->direction == OUT) {
+		value &= ~ENDPTCTRL_RXT_MASK;
+		value &= ~ENDPTCTRL_RXS;
+
+		if (ep->type == CTRL)
+			value |= ENDPTCTRL_RXT_CTRL;
+		else
+			value |= ENDPTCTRL_RXT_BULK;
+
+		value |= ENDPTCTRL_RXE;
+	} else {
+		value &= ~ENDPTCTRL_TXT_MASK;
+		value &= ~ENDPTCTRL_TXS;
+
+		if (ep->type == CTRL)
+			value |= ENDPTCTRL_TXT_CTRL;
+		else
+			value |= ENDPTCTRL_TXT_BULK;
+
+		value |= ENDPTCTRL_TXE;
+	}
+
+	usb_writel(ep->usb, value, ENDPTCTRL(ep->index));
+}
+
+static void usb_ep_flush(struct usb_ep *ep)
+{
+	uint32_t mask = usb_ep_mask(ep);
 	uint32_t value;
 
-	uart_printf(debug, "> %s(ep=%p)\n", __func__, ep);
-	uart_printf(debug, "  dqh: %p\n", dqh);
+	usb_writel(ep->usb, mask, ENDPTFLUSH);
 
-	dqh->capabilities = DQH_CAPS_ZLT | (512 << 16) | DQH_CAPS_IOC;
-	dqh->current = 0;
-	dqh->next = ((uint32_t)&dtd) & 0xffffff80;
-	dqh->token = 0;
-	dqh->buffers[0] = 0;
-	dqh->buffers[1] = 0;
-	dqh->buffers[2] = 0;
-	dqh->buffers[3] = 0;
-	dqh->buffers[4] = 0;
-	dqh->reserved0 = 0;
-	dqh->setup[0] = 0;
-	dqh->setup[1] = 0;
-	dqh->reserved1 = 0;
-	dqh->reserved2 = 0;
-	dqh->reserved3 = 0;
-	dqh->reserved4 = 0;
-
-	dtd.next = DTD_NEXT_TERMINATE;
-	/* transfer 0 bytes */
-	dtd.token = (0 << 16) | DTD_TOKEN_ACTIVE;
-	dtd.buffers[0] = 0;
-
-	uart_printf(debug, "    next: %08x\n", dqh->next);
-
-	value = usb_readl(ep->usb, ENDPTPRIME);
-	value |= usb_ep_mask(ep);
-	uart_printf(debug, "  ENDPTPRIME: %08x\n", value);
-	usb_writel(ep->usb, value, ENDPTPRIME);
-
-#if 0
-	while (retries--) {
-		value = usb_readl(ep->usb, USBSTS);
-		uart_printf(debug, "  USBSTS: %08x\n", value);
-		value = usb_readl(ep->usb, ENDPTSTATUS);
-		uart_printf(debug, "  ENDPTSTATUS: %08x\n", value);
-		value = usb_readl(ep->usb, ENDPTPRIME);
-		uart_printf(debug, "  ENDPTPRIME: %08x\n", value);
-		value = usb_readl(ep->usb, ENDPTCOMPLETE);
-		uart_printf(debug, "  ENDPTCOMPLETE: %08x\n", value);
-		udelay(1000000);
+	while (true) {
+		value = usb_readl(ep->usb, ENDPTFLUSH);
+		if ((value & mask) == 0)
+			break;
 	}
-#endif
 
-	uart_printf(debug, "< %s()\n", __func__);
+	while (true) {
+		value = usb_readl(ep->usb, ENDPTSTATUS);
+		if ((value & mask) == 0)
+			break;
+	}
+
+	while (true) {
+		value = usb_readl(ep->usb, ENDPTPRIME);
+		if ((value & mask) == 0)
+			break;
+	}
+
+	memset(ep->dqh, 0, sizeof(*ep->dqh));
+	memset(ep->dtd, 0, sizeof(*ep->dtd));
+
+	usb_writel(ep->usb, mask, ENDPTCOMPLETE);
 }
-#endif
+
+static void usb_ep_prime(struct usb_ep *ep)
+{
+	uint32_t mask = usb_ep_mask(ep), value;
+
+	usb_writel(ep->usb, mask, ENDPTPRIME);
+
+	while (true) {
+		value = usb_readl(ep->usb, ENDPTPRIME);
+		if ((value & mask) == 0)
+			break;
+	}
+}
 
 static void usb_ep_send(struct usb_ep *ep, const void *buffer, size_t size)
 {
-	/*
-	uart_printf(debug, "> %s(ep=%p, buffer=%p, size=%zu)\n", __func__, ep,
-		    buffer, size);
-	*/
-
-	if (1)
-		usb_ep_flush(ep);
+	usb_ep_flush(ep);
 
 	ep->dqh->caps = DQH_CAPS_ZLT | DQH_CAPS_MAX_PKT_LEN(ep->max_pkt_len) |
 			DQH_CAPS_IOC;
@@ -504,21 +443,11 @@ static void usb_ep_send(struct usb_ep *ep, const void *buffer, size_t size)
 	ep->dtd->buffers[0] = (uint32_t)buffer;
 
 	usb_ep_prime(ep);
-
-	/*
-	uart_printf(debug, "< %s()\n", __func__);
-	*/
 }
 
 static void usb_ep_recv(struct usb_ep *ep, void *buffer, size_t size)
 {
-	if (0) {
-		uart_printf(debug, "> %s(ep=%p, buffer=%p, size=%zu)\n",
-			    __func__, ep, buffer, size);
-	}
-
-	if (1)
-		usb_ep_flush(ep);
+	usb_ep_flush(ep);
 
 	memset(ep->dqh, 0, sizeof(*ep->dqh));
 	ep->dqh->caps = DQH_CAPS_ZLT | DQH_CAPS_MAX_PKT_LEN(ep->max_pkt_len);
@@ -531,30 +460,16 @@ static void usb_ep_recv(struct usb_ep *ep, void *buffer, size_t size)
 	ep->dtd->buffers[0] = (uint32_t)buffer & ~0x1f;
 
 	if (0) {
-		uart_printf(debug, "  dqh: %p\n", ep->dqh);
+		uart_printf(debug, "  dqh:\n");
 		uart_printf(debug, "    caps: %08x\n", ep->dqh->caps);
 		uart_printf(debug, "    next: %08x\n", ep->dqh->next);
-		uart_printf(debug, "    info: %08x\n", ep->dqh->info);
-	}
-
-	if (0) {
-		unsigned int i;
-
-		uart_printf(debug, "  dtd: %p\n", ep->dtd);
+		uart_printf(debug, "  dtd:\n");
 		uart_printf(debug, "    next: %08x\n", ep->dtd->next);
 		uart_printf(debug, "    info: %08x\n", ep->dtd->info);
-		uart_printf(debug, "    buffers:\n");
-
-		for (i = 0; i < 5; i++)
-			uart_printf(debug, "      [%u]: %08x\n", i, ep->dtd->buffers[i]);
-
-		uart_printf(debug, "    reserved: %08x\n", ep->dtd->reserved);
+		uart_printf(debug, "    data: %08x\n", ep->dtd->buffers[0]);
 	}
 
 	usb_ep_prime(ep);
-
-	if (0)
-		uart_printf(debug, "< %s()\n", __func__);
 }
 
 static void usb_ep_wait(struct usb_ep *ep)
@@ -563,22 +478,12 @@ static void usb_ep_wait(struct usb_ep *ep)
 	unsigned int retries = 1000;
 	uint32_t prime, status;
 
-	if (0)
-		uart_printf(debug, "> %s(ep=%p)\n", __func__, ep);
-
-	if (ep->dqh->info & ((1 << 6) | (1 << 5) | (1 << 3)))
-		uart_printf(debug, "  error detected\n");
-
 	while (retries) {
 		status = usb_readl(ep->usb, ENDPTSTATUS);
 		prime = usb_readl(ep->usb, ENDPTPRIME);
 
 		if (((prime & mask) == 0) && ((status & mask) == 0))
 			break;
-
-		if (0)
-			uart_printf(debug, "  prime: %08x status: %08x\n",
-				    prime, status);
 
 		udelay(1000);
 		retries--;
@@ -588,8 +493,18 @@ static void usb_ep_wait(struct usb_ep *ep)
 		uart_printf(debug, "time-out: prime: %08x status: %08x\n",
 			    prime, status);
 
-	if (ep->dqh->info & ((1 << 6) | (1 << 5) | (1 << 3)))
-		uart_printf(debug, "  error detected\n");
+	if (ep->dqh->info & ((1 << 6) | (1 << 5) | (1 << 3))) {
+		uart_printf(debug, "  error detected: %08x\n", ep->dqh->info);
+		uart_printf(debug, "  dtd:\n");
+		uart_printf(debug, "    next: %08x\n", ep->dtd->next);
+		uart_printf(debug, "    info: %08x\n", ep->dtd->info);
+		uart_printf(debug, "    buffers:\n");
+		uart_printf(debug, "      0: %08x\n", ep->dtd->buffers[0]);
+		uart_printf(debug, "      1: %08x\n", ep->dtd->buffers[1]);
+		uart_printf(debug, "      2: %08x\n", ep->dtd->buffers[2]);
+		uart_printf(debug, "      3: %08x\n", ep->dtd->buffers[3]);
+		uart_printf(debug, "      4: %08x\n", ep->dtd->buffers[4]);
+	}
 
 	retries = 1000;
 
@@ -608,33 +523,13 @@ static void usb_ep_wait(struct usb_ep *ep)
 	if (ep->dqh->info & ((1 << 6) | (1 << 5) | (1 << 3)))
 		uart_printf(debug, "  error detected\n");
 
-#if 0
-	uart_printf(debug, "endpoint %p ready\n", ep);
-	uart_printf(debug, "  dqh: %p\n", ep->dqh);
-	uart_printf(debug, "    caps: %08x\n", ep->dqh->caps);
-	uart_printf(debug, "    curr: %08x\n", ep->dqh->current);
-	uart_printf(debug, "    next: %08x\n", ep->dqh->next);
-	uart_printf(debug, "    info: %08x\n", ep->dqh->info);
-	uart_printf(debug, "    buffers:\n");
-	uart_printf(debug, "      [0]: %08x\n", ep->dqh->buffers[0]);
-	uart_printf(debug, "      [1]: %08x\n", ep->dqh->buffers[1]);
-	uart_printf(debug, "      [2]: %08x\n", ep->dqh->buffers[2]);
-	uart_printf(debug, "      [3]: %08x\n", ep->dqh->buffers[3]);
-	uart_printf(debug, "      [4]: %08x\n", ep->dqh->buffers[4]);
-#endif
-
 	usb_writel(ep->usb, mask, ENDPTCOMPLETE);
+}
 
-	/*
-	value = usb_readl(ep->usb, ENDPTSTATUS);
-	uart_printf(debug, "  ENDPTSTATUS: %08x\n", value);
-
-	value = usb_readl(ep->usb, ENDPTPRIME);
-	uart_printf(debug, "  ENDPTPRIME: %08x\n", value);
-	*/
-
-	if (0)
-		uart_printf(debug, "< %s()\n", __func__);
+static void usb_ep_ack(struct usb_ep *ep)
+{
+	usb_ep_send(ep, NULL, 0);
+	usb_ep_wait(ep);
 }
 
 static void prepare_device_descriptor(struct usb_device_descriptor *desc)
@@ -655,32 +550,28 @@ static void prepare_device_descriptor(struct usb_device_descriptor *desc)
 	desc->bcdDevice = major << 8 | minor;
 }
 
-static void handle_setup_get_descriptor(struct usb_ep *ep)
+static struct usb_setup *usb_ep_get_setup(struct usb_ep *ep)
 {
-	struct usb_setup *setup = (struct usb_setup *)ep->dqh->setup;
+	return (struct usb_setup *)ep->dqh->setup;
+}
+
+static void usb_process_setup_get_descriptor(struct usb *usb)
+{
+	struct usb_setup *setup = usb_ep_get_setup(&usb->ep_ctrl_out);
 	uint8_t index = setup->wValue & 0xff;
 	uint8_t type = setup->wValue >> 8;
 	const void *data = NULL;
 	size_t size = 0;
 
-	if (0)
-		uart_printf(debug, "GET_DESCRIPTOR: %02x %02x\n", type, index);
-
 	switch (type) {
 	case USB_DESCRIPTOR_TYPE_DEVICE:
-		if (0)
-			uart_printf(debug, "  device: %u\n", setup->wLength);
-
 		prepare_device_descriptor(&device_descriptor);
-		usb_ep_send(&ep_ctrl_in, &device_descriptor,
+		usb_ep_send(&usbd.ep_ctrl_in, &device_descriptor,
 			    sizeof(device_descriptor));
-		usb_ep_send(&ep_ctrl_out, NULL, 0);
+		usb_ep_send(&usbd.ep_ctrl_out, NULL, 0);
 		break;
 
 	case USB_DESCRIPTOR_TYPE_CONFIGURATION:
-		if (0)
-			uart_printf(debug, "  configuration: %u\n", setup->wLength);
-
 		if (setup->wLength == sizeof(configuration.configuration)) {
 			size = sizeof(configuration.configuration);
 			data = &configuration.configuration;
@@ -689,15 +580,12 @@ static void handle_setup_get_descriptor(struct usb_ep *ep)
 			data = &configuration;
 		}
 
-		usb_ep_send(&ep_ctrl_in, data, size);
-		usb_ep_send(&ep_ctrl_out, NULL, 0);
+		usb_ep_send(&usbd.ep_ctrl_in, data, size);
+		usb_ep_send(&usbd.ep_ctrl_out, NULL, 0);
 		break;
 
 	case USB_DESCRIPTOR_TYPE_STRING:
-		if (0)
-			uart_printf(debug, "  string: %u\n", setup->wLength);
-
-		switch (setup->wValue & 0xff) {
+		switch (index) {
 		case USB_LANGUAGE_ID:
 			size = sizeof(language_ids);
 			data = language_ids;
@@ -719,266 +607,47 @@ static void handle_setup_get_descriptor(struct usb_ep *ep)
 			break;
 		}
 
-		usb_ep_send(&ep_ctrl_in, data, size);
-		usb_ep_send(&ep_ctrl_out, NULL, 0);
+		usb_ep_send(&usbd.ep_ctrl_in, data, size);
+		usb_ep_send(&usbd.ep_ctrl_out, NULL, 0);
 		break;
 	}
 }
 
-static int handle_setup(struct usb_ep *ep)
+static bool usb_process_setup(struct usb *usb)
 {
-	struct usb_setup *setup = (struct usb_setup *)ep->dqh->setup;
+	struct usb_setup *setup = usb_ep_get_setup(&usb->ep_ctrl_out);
 	uint32_t value;
-
-	if (0) {
-		uart_printf(debug, "setup: %p (dQH: %p)\n", setup, ep->dqh);
-		uart_printf(debug, "  bmRequestType: %02x\n", setup->bmRequestType);
-		uart_printf(debug, "  bRequest: %02x\n", setup->bRequest);
-		uart_printf(debug, "  wValue: %04x\n", setup->wValue);
-		uart_printf(debug, "  wIndex: %04x\n", setup->wIndex);
-		uart_printf(debug, "  wLength: %04x\n", setup->wLength);
-	}
 
 	switch (setup->bmRequestType) {
 	case USB_SETUP_REQUEST_TYPE_DEVICE_TO_HOST:
 		switch (setup->bRequest) {
 		case USB_SETUP_REQUEST_GET_DESCRIPTOR:
-			handle_setup_get_descriptor(ep);
-
+			uart_printf(debug, "GET_DESCRIPTOR: %04x\n",
+				    setup->wValue);
+			usb_process_setup_get_descriptor(usb);
 			break;
 		}
 
 	case USB_SETUP_REQUEST_TYPE_HOST_TO_DEVICE:
 		switch (setup->bRequest) {
 		case USB_SETUP_REQUEST_SET_ADDRESS:
-			uart_printf(debug, "SET_ADDRESS: %04x\n", setup->wValue);
-			usb_ep_send(&ep_ctrl_in, NULL, 0);
-			usb_ep_wait(&ep_ctrl_in);
+			uart_printf(debug, "SET_ADDRESS: %04x\n",
+				    setup->wValue);
+			usb_ep_ack(&usb->ep_ctrl_in);
 
 			value = PERIODICLISTBASE_USBADR(setup->wValue);
-			usb_writel(ep->usb, value, PERIODICLISTBASE);
+			usb_writel(usb, value, PERIODICLISTBASE);
 			break;
 
 		case USB_SETUP_REQUEST_SET_CONFIGURATION:
-			uart_printf(debug, "SET_CONFIGURATION: %04x\n", setup->wValue);
-			usb_ep_send(&ep_ctrl_in, NULL, 0);
-			break;
+			uart_printf(debug, "SET_CONFIGURATION: %04x\n",
+				    setup->wValue);
+			usb_ep_ack(&usb->ep_ctrl_in);
+			return true;
 		}
 	}
 
-	return 0;
-}
-
-#if 0
-static bool usb_ep_ready(struct usb_ep *ep)
-{
-	uint32_t status, prime, mask;
-
-	uart_printf(debug, "> %s(ep=%p)\n", __func__, ep);
-
-	status = usb_readl(ep->usb, ENDPTSTATUS);
-	prime = usb_readl(ep->usb, ENDPTPRIME);
-	mask = usb_ep_mask(ep);
-
-	uart_printf(debug, "  status: %08x, prime: %08x, mask: %08x\n", status, prime, mask);
-
-	uart_printf(debug, "< %s()\n", __func__);
-
-	return (status & mask) == 0 && (prime & mask) == 0;
-}
-#endif
-
-static struct usb_ep *usb_ep_get(unsigned int index)
-{
-	switch (index) {
-	case 0:
-		return &ep_ctrl_out;
-
-	case 1:
-		return &ep_ctrl_in;
-
-	case 2:
-		return &ep_bulk_out;
-
-	case 3:
-		return &ep_bulk_in;
-	}
-
-	return NULL;
-}
-
-#define NV3P_VERSION 0x01
-
-#define NV3P_PACKET_TYPE_COMMAND 0x01
-#define NV3P_PACKET_TYPE_DATA 0x02
-#define NV3P_PACKET_TYPE_ACK 0x04
-#define NV3P_PACKET_TYPE_NAK 0x05
-
-#define NV3P_COMMAND_GET_PLATFORM_INFO 0x01
-#define NV3P_COMMAND_DOWNLOAD_BCT 0x04
-#define NV3P_COMMAND_DOWNLOAD_BOOTLOADER 0x06
-#define NV3P_COMMAND_STATUS 0x0a
-
-#define NV3P_STATUS_OK 0x00
-
-struct nv3p_header {
-	uint32_t version;
-	uint32_t type;
-	uint32_t sequence;
-};
-
-struct nv3p_packet_command {
-	struct nv3p_header header;
-	uint32_t length;
-	uint32_t command;
-	uint32_t checksum;
-};
-
-struct nv3p_packet_download_bct {
-	struct nv3p_header header;
-	uint32_t length;
-	uint32_t command;
-	uint32_t size;
-	uint32_t checksum;
-};
-
-struct nv3p_packet_download_bootloader {
-	struct nv3p_header header;
-	uint32_t length;
-	uint32_t command;
-	uint64_t size;
-	uint32_t load;
-	uint32_t entry;
-	uint32_t checksum;
-} __attribute__((packed));
-
-struct nv3p_packet_ack {
-	struct nv3p_header header;
-	uint32_t checksum;
-};
-
-#define NV3P_NAK_SUCCESS  0x00000001
-#define NV3P_NAK_BAD_CMD  0x00000002
-#define NV3P_NAK_BAD_DATA 0x00000003
-
-struct nv3p_packet_nak {
-	struct nv3p_header header;
-	uint32_t error;
-	uint32_t checksum;
-};
-
-#define NV3P_STRING_MAX 32
-
-struct nv3p_command_status {
-	char message[NV3P_STRING_MAX];
-	uint32_t code;
-	uint32_t flags;
-};
-
-struct nv3p_packet_status {
-	struct nv3p_header header;
-	uint32_t length;
-	uint32_t command;
-	struct nv3p_command_status status;
-	uint32_t checksum;
-};
-
-struct nv3p_packet_data {
-	struct nv3p_header header;
-	uint32_t length;
-};
-
-struct nv3p_chip_id {
-	uint16_t id;
-	uint8_t major;
-	uint8_t minor;
-} __attribute__((packed));
-
-struct nv3p_board_id {
-	uint32_t board_no;
-	uint32_t fab;
-	uint32_t mem_type;
-	uint32_t freq;
-} __attribute__((packed));
-
-struct nv3p_platform_info {
-	uint32_t uid[4];
-	struct nv3p_chip_id chip;
-	uint32_t sku;
-	uint32_t version;
-	uint32_t boot_device;
-	uint32_t op_mode;
-	uint32_t dev_conf_strap;
-	uint32_t dev_conf_fuse;
-	uint32_t sdram_conf_strap;
-	uint32_t reserved[2];
-	struct nv3p_board_id board_id;
-	/*
-	uint32_t warranty_fuse;
-	uint32_t skip_auto_detect;
-	*/
-} __attribute__((packed));
-
-struct nv3p_packet_platform_info {
-	struct nv3p_header header;
-	uint32_t length;
-	struct nv3p_platform_info info;
-	uint32_t checksum;
-} __attribute__((packed));
-
-static void prepare_platform_info(struct nv3p_platform_info *info)
-{
-	uint32_t value;
-
-	value = readl(TEGRA_APB_MISC_BASE + 0x804);
-	info->chip.id = (value >> 8) & 0xff;
-	info->chip.minor = (value >> 16) & 0xf;
-	info->chip.major = (value >> 4) & 0xf;
-
-	value = readl(TEGRA_FUSE_BASE + 0x110);
-	info->sku = value & 0xf;
-
-	info->version = 0x1;
-	info->boot_device = 0x3;
-
-#define TEGRA_PMC_BASE 0x7000e400
-#define PMC_STRAPPING_OPT_A 0x64
-
-	value = readl(TEGRA_PMC_BASE + PMC_STRAPPING_OPT_A);
-	if (0)
-		uart_printf(debug, "strapping options: %08x\n", (value >> 26) & 0xf);
-	/* TODO: map stapping options to boot device */
-	info->boot_device = 0x2;
-
-	value = readl(TEGRA_FUSE_BASE + 0x1a0);
-	if (value) {
-		if (0)
-			uart_printf(debug, "security mode\n");
-
-		value = readl(TEGRA_FUSE_BASE + 0x268);
-		if (value) {
-			unsigned int i;
-
-			value = 0;
-
-			for (i = 0; i < 4; i++)
-				value |= readl(TEGRA_FUSE_BASE + 0x050 + (i * 4));
-
-			if (value)
-				info->op_mode = 0x4;
-			else
-				info->op_mode = 0x5;
-		} else {
-			info->op_mode = 0x4;
-		}
-	} else {
-		value = readl(TEGRA_FUSE_BASE + 0x100);
-		if (value) {
-			info->op_mode = 0x3;
-		} else {
-			info->op_mode = 0x1;
-		}
-	}
+	return false;
 }
 
 static int usb_irq(unsigned int irq, void *data)
@@ -986,16 +655,8 @@ static int usb_irq(unsigned int irq, void *data)
 	struct usb *usb = data;
 	uint32_t value;
 
-	if (0)
-		uart_printf(debug, "> %s(irq=%u, data=%p)\n", __func__, irq, data);
-
 	value = usb_readl(usb, USBSTS);
-	if (0)
-		uart_printf(debug, "  USBSTS: %08x\n", value);
 	usb_writel(usb, value, USBSTS);
-
-	if (0)
-		uart_printf(debug, "< %s()\n", __func__);
 
 	return IRQ_HANDLED;
 }
@@ -1053,7 +714,7 @@ static void nv3p_send_nak(uint32_t sequence, uint32_t error)
 }
 #endif
 
-static void nv3p_send_ack(uint32_t sequence)
+static void nv3p_send_ack(struct usb *usb, uint32_t sequence)
 {
 	struct nv3p_packet_ack *ack = (struct nv3p_packet_ack *)send;
 	uint32_t checksum = 0;
@@ -1078,11 +739,11 @@ static void nv3p_send_ack(uint32_t sequence)
 	uart_printf(debug, "    checksum: %08x\n", ack->checksum);
 #endif
 
-	usb_ep_send(&ep_bulk_in, ack, sizeof(*ack));
-	usb_ep_wait(&ep_bulk_in);
+	usb_ep_send(&usb->ep_bulk_in, ack, sizeof(*ack));
+	usb_ep_wait(&usb->ep_bulk_in);
 }
 
-static void nv3p_send_status(uint32_t sequence, const char *message,
+static void nv3p_send_status(struct usb *usb, uint32_t sequence, const char *message,
 			     uint32_t code, uint32_t flags)
 {
 	struct nv3p_packet_status *status = (struct nv3p_packet_status *)send;
@@ -1119,14 +780,14 @@ static void nv3p_send_status(uint32_t sequence, const char *message,
 	uart_printf(debug, "    checksum: %08x\n", status->checksum);
 #endif
 
-	usb_ep_send(&ep_bulk_in, send, sizeof(*status));
-	usb_ep_wait(&ep_bulk_in);
+	usb_ep_send(&usb->ep_bulk_in, send, sizeof(*status));
+	usb_ep_wait(&usb->ep_bulk_in);
 }
 
 static uint32_t payload_length;
 static void *payload;
 
-static void nv3p_process(struct usb_ep *ep)
+static void __attribute__((unused)) usb_nv3p_process(struct usb *usb)
 {
 	struct nv3p_header *header = (struct nv3p_header *)recv;
 	uint32_t sequence = header->sequence;
@@ -1149,91 +810,6 @@ static void nv3p_process(struct usb_ep *ep)
 			uart_printf(debug, "    checksum: %08x\n", packet->checksum);
 		}
 
-		if (packet->command == NV3P_COMMAND_GET_PLATFORM_INFO) {
-			struct nv3p_packet_platform_info *info = (struct nv3p_packet_platform_info *)send;
-			struct nv3p_packet_status *status = (struct nv3p_packet_status *)send;
-			uint32_t checksum = 0;
-			unsigned int i;
-
-			if (0)
-				uart_printf(debug, "      NV3P_CMD_GET_PLATFORM_INFO\n");
-
-			nv3p_send_ack(sequence);
-
-			memset(info, 0, sizeof(*info));
-			info->header.version = NV3P_VERSION;
-			info->header.type = NV3P_PACKET_TYPE_DATA;
-			info->header.sequence = sequence;
-			info->length = sizeof(struct nv3p_platform_info);
-
-			prepare_platform_info(&info->info);
-
-			checksum = 0;
-
-			for (i = 0; i < sizeof(*info); i++)
-				checksum += send[i];
-
-			info->checksum = ~checksum + 1;
-
-			if (0) {
-				uart_printf(debug, "  data packet:\n");
-				uart_printf(debug, "    header:\n");
-				uart_printf(debug, "      version: %08x\n", info->header.version);
-				uart_printf(debug, "      type: %08x\n", info->header.type);
-				uart_printf(debug, "      sequence: %08x\n", info->header.sequence);
-				uart_printf(debug, "    length: %08x\n", info->length);
-				uart_printf(debug, "    checksum: %08x\n", info->checksum);
-			}
-
-			usb_ep_send(&ep_bulk_in, send, sizeof(*info));
-			usb_ep_wait(&ep_bulk_in);
-
-			/* queue new receive buffer */
-			usb_ep_recv(&ep_bulk_out, recv, sizeof(recv));
-			usb_ep_wait(&ep_bulk_out);
-
-			memset(status, 0, sizeof(*status));
-			status->header.version = NV3P_VERSION;
-			status->header.type = NV3P_PACKET_TYPE_COMMAND;
-			status->header.sequence = sequence;
-			status->length = sizeof(struct nv3p_command_status);
-			status->command = NV3P_COMMAND_STATUS;
-			status->status.message[0] = 'O';
-			status->status.message[1] = 'K';
-			status->status.message[2] = '\0';
-			status->status.code = NV3P_STATUS_OK;
-			status->status.flags = 0;
-
-			checksum = 0;
-
-			for (i = 0; i < sizeof(*status); i++)
-				checksum += send[i];
-
-			status->checksum = ~checksum + 1;
-
-			if (0) {
-				uart_printf(debug, "  status packet:\n");
-				uart_printf(debug, "    header:\n");
-				uart_printf(debug, "      version: %08x\n", status->header.version);
-				uart_printf(debug, "      type: %08x\n", status->header.type);
-				uart_printf(debug, "      sequence: %08x\n", status->header.sequence);
-				uart_printf(debug, "    length: %08x\n", status->length);
-				uart_printf(debug, "    command: %08x\n", status->command);
-				uart_printf(debug, "    status:\n");
-				uart_printf(debug, "      message: %s\n", status->status.message);
-				uart_printf(debug, "      code: %08x\n", status->status.code);
-				uart_printf(debug, "      flags: %08x\n", status->status.flags);
-				uart_printf(debug, "    checksum: %08x\n", status->checksum);
-			}
-
-			usb_ep_send(&ep_bulk_in, send, sizeof(*status));
-			usb_ep_wait(&ep_bulk_in);
-
-			/* queue new receive buffer */
-			usb_ep_recv(&ep_bulk_out, recv, sizeof(recv));
-			usb_ep_wait(&ep_bulk_out);
-		}
-
 		if (packet->command == NV3P_COMMAND_DOWNLOAD_BCT) {
 			struct nv3p_packet_download_bct *command = (struct nv3p_packet_download_bct *)recv;
 
@@ -1244,7 +820,7 @@ static void nv3p_process(struct usb_ep *ep)
 			payload = bct;
 			payload_length = command->size;
 
-			nv3p_send_ack(sequence);
+			nv3p_send_ack(usb, sequence);
 		}
 
 		if (packet->command == NV3P_COMMAND_DOWNLOAD_BOOTLOADER) {
@@ -1256,8 +832,8 @@ static void nv3p_process(struct usb_ep *ep)
 			uart_printf(debug, "        load: %x\n", command->load);
 			uart_printf(debug, "        entry: %x\n", command->entry);
 
-			nv3p_send_ack(sequence);
-			nv3p_send_status(sequence, "OK", NV3P_STATUS_OK, 0);
+			nv3p_send_ack(usb, sequence);
+			nv3p_send_status(usb, sequence, "OK", NV3P_STATUS_OK, 0);
 
 			payload = (void *)command->load;
 			payload_length = command->size;
@@ -1285,20 +861,14 @@ static void nv3p_process(struct usb_ep *ep)
 		while (received < length) {
 #ifdef BOUNCE_BUFFER
 			num = min(2048, sizeof(recv));
-			usb_ep_recv(ep, recv, num);
+			usb_ep_recv(&usb->ep_bulk_out, recv, num);
 #else
 			num = 2048;
-			usb_ep_recv(ep, payload + received, num);
+			usb_ep_recv(&usb->ep_bulk_out, payload + received, num);
 #endif
-			usb_ep_wait(ep);
+			usb_ep_wait(&usb->ep_bulk_out);
 
-			if (0) {
-				uart_printf(debug, "  dQH: %p\n", ep->dqh);
-				uart_printf(debug, "    current: %08x\n", ep->dqh->current);
-				uart_printf(debug, "    info: %08x\n", ep->dqh->info);
-			}
-
-			num -= ((ep->dtd->info >> 16) & 0xffff);
+			num -= ((usb->ep_bulk_out.dtd->info >> 16) & 0xffff);
 
 			if (0)
 				uart_printf(debug, "  received %u bytes\n", num);
@@ -1329,6 +899,11 @@ static void nv3p_process(struct usb_ep *ep)
 		nv3p_checksum_done(&checksum);
 		payload_length -= received;
 
+		if (payload == bct) {
+			uart_printf(debug, "BCT checksum: %08x\n", checksum);
+			bct_csum = checksum;
+		}
+
 		if (payload_length != 0)
 			uart_printf(debug, "%u bytes remaining\n", payload_length);
 
@@ -1346,7 +921,15 @@ static void nv3p_process(struct usb_ep *ep)
 
 		if (payload == bct) {
 			uint32_t value = readl(TEGRA_PMC_BASE + PMC_STRAPPING_OPT_A);
-			unsigned int index;
+			unsigned int index, i;
+			uint32_t checksum;
+
+			for (i = 0; i < 10; i++) {
+			nv3p_checksum_init(&checksum);
+			nv3p_checksum_update(&checksum, bct, sizeof(*bct));
+			nv3p_checksum_done(&checksum);
+			uart_printf(debug, "BCT checksum: %08x\n", checksum);
+			}
 
 			uart_printf(debug, "    strapping: %08x\n", value);
 			uart_printf(debug, "      RAM code: %02x\n", (value >> 4) & 0xf);
@@ -1424,17 +1007,17 @@ static void nv3p_process(struct usb_ep *ep)
 		}
 
 		/* receive checksum */
-		usb_ep_recv(ep, recv, sizeof(recv));
-		usb_ep_wait(ep);
+		usb_ep_recv(&usb->ep_bulk_out, recv, sizeof(recv));
+		usb_ep_wait(&usb->ep_bulk_out);
 
-		nv3p_send_ack(sequence);
+		nv3p_send_ack(usb, sequence);
 
 		if (payload_length == 0)
-			nv3p_send_status(header->sequence, "OK", NV3P_STATUS_OK, 0);
+			nv3p_send_status(usb, sequence, "OK", NV3P_STATUS_OK, 0);
 	}
 
 	/* queue another receive buffer */
-	usb_ep_recv(&ep_bulk_out, recv, sizeof(recv));
+	usb_ep_recv(&usb->ep_bulk_out, recv, sizeof(recv));
 }
 
 void usb_init(struct usb *usb)
@@ -1614,8 +1197,8 @@ void usb_init(struct usb *usb)
 	/* this will be reset to 0 during the reset sequence above */
 	usb_writel(usb, usb->base + 0x1000, ASYNCLISTADDR);
 
-	usb_ep_setup(&ep_ctrl_out);
-	usb_ep_setup(&ep_ctrl_in);
+	usb_ep_setup(&usb->ep_ctrl_out);
+	usb_ep_setup(&usb->ep_ctrl_in);
 
 	if (0) {
 		value = usb_readl(usb, HOSTPC1_DEVLC);
@@ -1655,10 +1238,49 @@ void usb_init(struct usb *usb)
 		}
 	}
 
-	/* loop */
-	while (!uart_tstc(debug)) {
-		uint32_t status;
+	uart_printf(debug, "< %s()\n", __func__);
+}
 
+static void usb_reset(struct usb *usb)
+{
+	uint32_t value;
+
+	value = PERIODICLISTBASE_USBADR(0);
+	usb_writel(usb, value, PERIODICLISTBASE);
+
+	value = usb_readl(usb, ENDPTSETUPSTAT);
+	usb_writel(usb, value, ENDPTSETUPSTAT);
+
+	value = usb_readl(usb, ENDPTCOMPLETE);
+	usb_writel(usb, value, ENDPTCOMPLETE);
+
+	/* flush endpoints */
+	usb_writel(usb, 0xffffffff, ENDPTFLUSH);
+
+	while (true) {
+		value = usb_readl(usb, ENDPTFLUSH);
+		if (value == 0)
+			break;
+	}
+
+	while (true) {
+		value = usb_readl(usb, ENDPTSTATUS);
+		if (value == 0)
+			break;
+	}
+
+	while (true) {
+		value = usb_readl(usb, ENDPTPRIME);
+		if (value == 0)
+			break;
+	}
+}
+
+int usb_enumerate(struct usb *usb)
+{
+	uint32_t status, value;
+
+	while (true) {
 		status = usb_readl(usb, USBSTS);
 		usb_writel(usb, status, USBSTS);
 
@@ -1669,36 +1291,7 @@ void usb_init(struct usb *usb)
 
 		if (status & USBSTS_URI) {
 			uart_printf(debug, "usb: reset detected\n");
-
-			value = PERIODICLISTBASE_USBADR(0);
-			usb_writel(usb, value, PERIODICLISTBASE);
-
-			value = usb_readl(usb, ENDPTSETUPSTAT);
-			usb_writel(usb, value, ENDPTSETUPSTAT);
-
-			value = usb_readl(usb, ENDPTCOMPLETE);
-			usb_writel(usb, value, ENDPTCOMPLETE);
-
-			/* flush endpoints */
-			usb_writel(usb, 0xffffffff, ENDPTFLUSH);
-
-			while (true) {
-				value = usb_readl(usb, ENDPTFLUSH);
-				if (value == 0)
-					break;
-			}
-
-			while (true) {
-				value = usb_readl(usb, ENDPTSTATUS);
-				if (value == 0)
-					break;
-			}
-
-			while (true) {
-				value = usb_readl(usb, ENDPTPRIME);
-				if (value == 0)
-					break;
-			}
+			usb_reset(usb);
 		}
 
 		if (status & USBSTS_PCI) {
@@ -1716,93 +1309,75 @@ void usb_init(struct usb *usb)
 
 			value = usb_readl(usb, ENDPTSETUPSTAT);
 			if (value) {
-				struct usb_ep *ep = NULL;
-				unsigned int i;
-				int err;
-
-				if (0)
-					uart_printf(debug, "ENDPTSETUPSTAT: %08x\n", value);
-
 				usb_writel(usb, value, ENDPTSETUPSTAT);
-
-				for (i = 0; i < 16; i++) {
-					if (value & (1 << i)) {
-						if (0)
-							uart_printf(debug, "SETUP on endpoint %u\n", i);
-
-						ep = usb_ep_get(i);
-						if (ep) {
-							/* handle endpoint */
-							err = handle_setup(ep);
-							if (!err) {
-								/* XXX: setting these up earlier will make them not work */
-								usb_ep_setup(&ep_bulk_out);
-								usb_ep_setup(&ep_bulk_in);
-
-								usb_ep_recv(&ep_bulk_out, recv, sizeof(recv));
-							}
-						}
-					}
-				}
-			}
-
-			value = usb_readl(usb, ENDPTCOMPLETE);
-			if (value) {
-				struct usb_ep *ep = NULL;
-				unsigned int i;
-
-				/*
-				uart_printf(debug, "ENDPTCOMPLETE: %08x\n", value);
-				*/
-				usb_writel(usb, value, ENDPTCOMPLETE);
-
-				for (i = 0; i < 32; i++) {
-					if (value & (1 << i)) {
-						unsigned int index = (i % 16) * 2 + i / 16;
-
-						if (0)
-							uart_printf(debug, "endpoint %u ready\n", index);
-
-						ep = usb_ep_get(index);
-						if (ep && ep->type == BULK && ep->direction == OUT) {
-							nv3p_process(ep);
-						}
-					}
-				}
+				if (usb_process_setup(usb))
+					break;
 			}
 		}
 	}
 
-	uart_printf(debug, "BIT: %p\n", bit);
-	uart_printf(debug, "  BootROM version: %08x\n", bit->boot_rom_version);
-	uart_printf(debug, "  Data version: %08x\n", bit->data_version);
-	uart_printf(debug, "  RCM version: %08x\n", bit->rcm_version);
-	uart_printf(debug, "  Boot type: %08x\n", bit->boot_type);
-	uart_printf(debug, "  Primary device: %08x\n", bit->primary_device);
-	uart_printf(debug, "  ...\n");
-	uart_printf(debug, "  Device initialized: %02x\n", bit->device_initialized);
-	uart_printf(debug, "  SDRAM initialized: %02x\n", bit->sdram_initialized);
-	uart_printf(debug, "  ...\n");
-	uart_printf(debug, "  BCT valid: %02x\n", bit->bct_valid);
-	uart_printf(debug, "  ...\n");
-	uart_printf(debug, "  Safe start address: %08x\n", bit->safe_start_address);
+	usb_ep_setup(&usb->ep_bulk_out);
+	usb_ep_setup(&usb->ep_bulk_in);
 
-	uart_printf(debug, "executing bootloader at %p\n", bootloader);
+	return 0;
+}
 
-	if (1) {
-		uint32_t *ptr = (uint32_t *)bootloader;
-		unsigned int i;
+static bool aligned(const void *ptr, unsigned int align)
+{
+	return ((unsigned long)ptr & (align - 1)) == 0;
+}
 
-		/*
-		for (i = 0; i < 16; i++)
-			ptr[i] = 0xaa551100;
-		*/
+ssize_t usb_bulk_recv(struct usb *usb, void *buffer, size_t size)
+{
+	void *payload;
 
-		for (i = 0; i < 16; i++)
-			uart_printf(debug, "  %p: %08x\n", &ptr[i], ptr[i]);
-	}
+	/*
+	 * If the buffer isn't properly aligned the data must be bounced, in
+	 * which case the size can't exceed that of the bounce buffer.
+	 *
+	 * TODO: Perhaps we can transfer in chunks in that case?
+	 */
+	if (size > sizeof(bounce) && !aligned(buffer, 32))
+		return -EINVAL;
 
-	//bootloader();
+	if (aligned(buffer, 32) == 0)
+		payload = bounce;
+	else
+		payload = buffer;
 
-	uart_printf(debug, "< %s()\n", __func__);
+	usb_ep_recv(&usb->ep_bulk_out, payload, size);
+	usb_ep_wait(&usb->ep_bulk_out);
+
+	size -= (usb->ep_bulk_out.dtd->info >> 16) & 0xffff;
+
+	if (payload == bounce)
+		memcpy(buffer, bounce, size);
+
+	return size;
+}
+
+ssize_t usb_bulk_send(struct usb *usb, const void *buffer, size_t size)
+{
+	const void *payload;
+
+	/*
+	 * If the buffer isn't properly aligned the data must be bounced, in
+	 * which case the size can't exceed that of the bounce buffer.
+	 *
+	 * TODO: Perhaps we can transfer in chunks in that case?
+	 */
+	if (size > sizeof(bounce) && !aligned(buffer, 32))
+		return -EINVAL;
+
+	if (aligned(buffer, 32) == 0) {
+		uart_printf(debug, "using bounce buffer\n");
+		memcpy(bounce, buffer, size);
+		payload = bounce;
+	} else
+		payload = buffer;
+
+	usb_ep_send(&usb->ep_bulk_in, payload, size);
+	usb_ep_wait(&usb->ep_bulk_in);
+
+	return size - ((usb->ep_bulk_out.dtd->info >> 16) & 0xffff);
 }

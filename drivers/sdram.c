@@ -814,3 +814,30 @@ void sdram_init(struct bct_sdram_params *params)
 
 	uart_printf(debug, "< %s()\n", __func__);
 }
+
+void sdram_test(void)
+{
+	uint32_t value = readl(TEGRA_MC_BASE + 0x050);
+	unsigned int offset = (value & (1 << 31)) ? 0x00000000 : 0x80000000;
+	size_t size = (value & 0x7fff) << 20;
+	uint32_t *ptr = (uint32_t *)offset;
+	unsigned int i;
+
+	uart_printf(debug, "memory: %#x-%#x\n", offset, offset + size - 1);
+
+	size /= 16;
+
+	uart_printf(debug, "writing...");
+
+	for (i = 0; i < size / 4; i++)
+		ptr[i] = 0xaa551100;
+
+	uart_printf(debug, "done\n");
+	uart_printf(debug, "checking...");
+
+	for (i = 0; i < size / 4; i++)
+		if (ptr[i] != 0xaa551100)
+			uart_printf(debug, "corruption @%p: %08x\n", &ptr[i], ptr[i]);
+
+	uart_printf(debug, "done\n");
+}

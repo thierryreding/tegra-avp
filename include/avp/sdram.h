@@ -4,5 +4,6 @@
 #include <avp/bct.h>
 
 void sdram_init(struct bct_sdram_params *params);
+void sdram_test(void);
 
 #endif
