@@ -3,9 +3,21 @@
 
 struct clk;
 
+enum osc_freq {
+	OSC_FREQ_13,
+	OSC_FREQ_16_8,
+	OSC_FREQ_19_2 = 4,
+	OSC_FREQ_38_4,
+	OSC_FREQ_12 = 8,
+	OSC_FREQ_48,
+	OSC_FREQ_26 = 12,
+};
+
 struct clk_rst {
 	unsigned long base;
 };
+
+void clock_osc_init(const struct clk_rst *clk_rst);
 
 struct clk_ops {
 	unsigned long (*get_rate)(const struct clk *clk);

@@ -116,16 +116,8 @@ void start(void)
 {
 	struct nv3p nv3p;
 
-	/* this seems to fix memory corruption seen during USB transfers */
-	if (1) {
-		uint32_t value;
+	clock_osc_init(&clk_rst);
 
-		value = readl(0x6000c000 + 0x000);
-		value |= 1 << 4;
-		writel(value, 0x6000c000 + 0x000);
-	}
-
-	//irq_init();
 	pinmux_apply();
 	car_apply();
 
