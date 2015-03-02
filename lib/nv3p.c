@@ -493,7 +493,7 @@ int nv3p_init(struct nv3p *nv3p, struct usb *usb)
 	return 0;
 }
 
-static void __attribute__((naked)) execute_bootloader(void *entry)
+static void __naked execute_bootloader(void *entry)
 {
 	asm (
 		"mrs r1, cpsr\n"

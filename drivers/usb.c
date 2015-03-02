@@ -121,8 +121,8 @@ struct usb_dtd {
 #define DTD_INFO_ACTIVE (1 << 7)
 
 /* one dTD (device transfer descriptor) per endpoint */
-static uint8_t bounce[4096] __attribute__((aligned(4096)));
-static struct usb_dtd dtd[4] __attribute__((aligned(32)));
+static uint8_t bounce[4096] __aligned(4096);
+static struct usb_dtd dtd[4] __aligned(32);
 
 enum {
 	CTRL,
@@ -212,13 +212,13 @@ static uint32_t bct_csum = 0;
 #define USB_PRODUCT_ID 0x02
 #define USB_SERIAL_ID 0x03
 
-static const uint8_t language_ids[] __attribute__((aligned(32))) = {
+static const uint8_t language_ids[] __aligned(32) = {
 	4,
 	USB_DESCRIPTOR_TYPE_STRING,
 	0x09, 0x04
 };
 
-static const uint8_t manufacturer[] __attribute__((aligned(32))) = {
+static const uint8_t manufacturer[] __aligned(32) = {
 	14,
 	USB_DESCRIPTOR_TYPE_STRING,
 	'N', 0,
@@ -229,7 +229,7 @@ static const uint8_t manufacturer[] __attribute__((aligned(32))) = {
 	'A', 0,
 };
 
-static const uint8_t product[] __attribute__((aligned(32))) = {
+static const uint8_t product[] __aligned(32) = {
 	8,
 	USB_DESCRIPTOR_TYPE_STRING,
 	'A', 0,
@@ -237,7 +237,7 @@ static const uint8_t product[] __attribute__((aligned(32))) = {
 	'X', 0,
 };
 
-static const uint8_t serial[] __attribute__((aligned(32))) = {
+static const uint8_t serial[] __aligned(32) = {
 	18,
 	USB_DESCRIPTOR_TYPE_STRING,
 	'0', 0,
@@ -250,7 +250,7 @@ static const uint8_t serial[] __attribute__((aligned(32))) = {
 	'0', 0,
 };
 
-static struct usb_device_descriptor device_descriptor __attribute__((aligned(32))) = {
+static struct usb_device_descriptor device_descriptor __aligned(32) = {
 	.bLength = sizeof(device_descriptor),
 	.bDescriptorType = USB_DESCRIPTOR_TYPE_DEVICE,
 	.bcdUSB = 0x0200,
@@ -272,9 +272,9 @@ struct usb_configuration {
 	struct usb_interface_descriptor interface;
 	struct usb_endpoint_descriptor ep_bulk_in;
 	struct usb_endpoint_descriptor ep_bulk_out;
-} __attribute__((packed));
+} __packed;
 
-static struct usb_configuration configuration __attribute__((aligned(32))) = {
+static struct usb_configuration configuration __aligned(32) = {
 	.configuration = {
 		.bLength = sizeof(struct usb_configuration_descriptor),
 		.bDescriptorType = USB_DESCRIPTOR_TYPE_CONFIGURATION,
@@ -650,7 +650,7 @@ static bool usb_process_setup(struct usb *usb)
 	return false;
 }
 
-static int usb_irq(unsigned int irq, void *data)
+static int __maybe_unused usb_irq(unsigned int irq, void *data)
 {
 	struct usb *usb = data;
 	uint32_t value;

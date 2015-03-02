@@ -1,6 +1,7 @@
 #ifndef USB_H
 #define USB_H
 
+#include <common.h>
 #include <types.h>
 
 #define USB_SETUP_REQUEST_TYPE_HOST_TO_DEVICE 0x00
@@ -15,7 +16,7 @@ struct usb_setup {
 	uint16_t wValue;
 	uint16_t wIndex;
 	uint16_t wLength;
-} __attribute__((packed));
+} __packed;
 
 #define USB_DESCRIPTOR_TYPE_DEVICE 0x01
 #define USB_DESCRIPTOR_TYPE_CONFIGURATION 0x02
@@ -38,7 +39,7 @@ struct usb_device_descriptor {
 	uint8_t iProduct;
 	uint8_t iSerialNumber;
 	uint8_t bNumConfigurations;
-} __attribute__((packed));
+} __packed;
 
 struct usb_configuration_descriptor {
 	uint8_t bLength;
@@ -49,7 +50,7 @@ struct usb_configuration_descriptor {
 	uint8_t iConfiguration;
 	uint8_t bmAttributes;
 	uint8_t bMaxPower;
-} __attribute__((packed));
+} __packed;
 
 struct usb_interface_descriptor {
 	uint8_t bLength;
@@ -61,7 +62,7 @@ struct usb_interface_descriptor {
 	uint8_t bInterfaceSubClass;
 	uint8_t bInterfaceProtocol;
 	uint8_t iInterface;
-} __attribute__((packed));
+} __packed;
 
 struct usb_endpoint_descriptor {
 	uint8_t bLength;
@@ -70,6 +71,6 @@ struct usb_endpoint_descriptor {
 	uint8_t bmAttributes;
 	uint16_t wMaxPacketSize;
 	uint8_t bInterval;
-} __attribute__((packed));
+} __packed;
 
 #endif

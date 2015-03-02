@@ -1,6 +1,7 @@
 #ifndef AVP_BCT_H
 #define AVP_BCT_H
 
+#include <common.h>
 #include <types.h>
 
 #define BCT_BAD_BLOCK_TABLE_SIZE 4096
@@ -12,41 +13,41 @@ struct bct_bad_block_table {
 	uint8_t block_size;
 	uint8_t bad_blocks[BCT_BAD_BLOCK_TABLE_SIZE / 8];
 	uint8_t reserved[BCT_BAD_BLOCK_TABLE_PADDING];
-} __attribute__((packed));
+} __packed;
 
 #define BCT_RSA_KEY_MODULUS_SIZE 2048
 
 struct bct_rsa_key_modulus {
 	uint8_t modulus[BCT_RSA_KEY_MODULUS_SIZE / 8];
-} __attribute__((packed));
+} __packed;
 
 #define BCT_CMAC_AES_HASH_SIZE 16
 
 struct bct_hash {
 	uint8_t hash[BCT_CMAC_AES_HASH_SIZE];
-} __attribute__((packed));
+} __packed;
 
 struct bct_rsa_pss_signature {
 	uint8_t signature[BCT_RSA_KEY_MODULUS_SIZE / 8];
-} __attribute__((packed));
+} __packed;
 
 struct bct_object_signature {
 	struct bct_hash hash;
 	struct bct_rsa_pss_signature signature;
-} __attribute__((packed));
+} __packed;
 
 #define BCT_CUSTOMER_DATA_SIZE 656
 
 struct bct_ecid {
 	uint32_t ecid[4];
-} __attribute__((packed));
+} __packed;
 
 struct bct_sdmmc_params {
 	uint8_t clock_divider;
 	uint32_t data_width;
 	uint8_t max_power_class;
 	uint8_t multi_page_support;
-} __attribute__((packed));
+} __packed;
 
 struct bct_snor_params {
 	uint32_t clock_source;
@@ -57,21 +58,21 @@ struct bct_snor_params {
 	uint32_t transfer_mode;
 	uint32_t busy_timeout;
 	uint32_t dma_timeout;
-} __attribute__((packed));
+} __packed;
 
 struct bct_spi_params {
 	uint32_t clock_source;
 	uint8_t clock_divider;
 	uint8_t read_type;
 	uint8_t page_size;
-} __attribute__((packed));
+} __packed;
 
 union bct_dev_params {
 	uint8_t data[64];
 	struct bct_sdmmc_params sdmmc;
 	struct bct_snor_params snor;
 	struct bct_spi_params spi;
-} __attribute__((packed));
+} __packed;
 
 #define BCT_MEMORY_TYPE_NONE 0
 #define BCT_MEMORY_TYPE_LPDDR2 1
@@ -387,7 +388,7 @@ struct bct_sdram_params {
 	uint32_t mc_mts_carveout_adr_hi;
 	uint32_t mc_mts_carveout_size_mb;
 	uint32_t mc_mts_carveout_ctrl;
-} __attribute__((packed));
+} __packed;
 
 struct bct_bootloader_info {
 	uint32_t version;
@@ -398,7 +399,7 @@ struct bct_bootloader_info {
 	uint32_t entry;
 	uint32_t attribute;
 	struct bct_object_signature signature;
-} __attribute__((packed));
+} __packed;
 
 #define BCT_MAX_PARAM_SETS 4
 #define BCT_MAX_SDRAM_SETS 4
@@ -426,6 +427,6 @@ struct bct {
 	uint8_t enable_fail_back;
 	uint8_t secure_jtag_control;
 	uint8_t reserved[BCT_RESERVED_SIZE];
-} __attribute__((packed));
+} __packed;
 
 #endif

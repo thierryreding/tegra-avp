@@ -1,6 +1,7 @@
 #ifndef NV3P_H
 #define NV3P_H
 
+#include <common.h>
 #include <types.h>
 
 struct usb;
@@ -48,7 +49,7 @@ struct nv3p_packet_download_bootloader {
 	uint32_t load;
 	uint32_t entry;
 	uint32_t checksum;
-} __attribute__((packed));
+} __packed;
 
 struct nv3p_packet_ack {
 	struct nv3p_header header;
@@ -90,14 +91,14 @@ struct nv3p_chip_id {
 	uint16_t id;
 	uint8_t major;
 	uint8_t minor;
-} __attribute__((packed));
+} __packed;
 
 struct nv3p_board_id {
 	uint32_t board_no;
 	uint32_t fab;
 	uint32_t mem_type;
 	uint32_t freq;
-} __attribute__((packed));
+} __packed;
 
 struct nv3p_platform_info {
 	uint32_t uid[4];
@@ -115,14 +116,14 @@ struct nv3p_platform_info {
 	uint32_t warranty_fuse;
 	uint32_t skip_auto_detect;
 	/**/
-} __attribute__((packed));
+} __packed;
 
 struct nv3p_packet_platform_info {
 	struct nv3p_header header;
 	uint32_t length;
 	struct nv3p_platform_info info;
 	uint32_t checksum;
-} __attribute__((packed));
+} __packed;
 
 struct nv3p {
 	struct usb *usb;
