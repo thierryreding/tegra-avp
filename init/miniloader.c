@@ -1,5 +1,4 @@
 #include <ctype.h>
-#include <irq.h>
 #include <nv3p.h>
 #include <stdbool.h>
 #include <types.h>
