@@ -12,11 +12,6 @@
 #include <avp/uart.h>
 #include <avp/usb.h>
 
-#undef USE_BOUNCE_BUFFER
-#ifdef USE_BOUNCE_BUFFER
-static uint8_t bounce[4096] __attribute__((aligned(4096)));
-#endif
-
 static struct bct bct;
 
 static void nv3p_checksum_init(uint32_t *checksum)
@@ -42,30 +37,12 @@ static uint32_t nv3p_checksum_done(uint32_t *checksum)
 
 static ssize_t nv3p_recv(struct nv3p *nv3p, void *buffer, size_t size)
 {
-	ssize_t num;
-
-#ifdef USE_BOUNCE_BUFFER
-	num = usb_bulk_recv(nv3p->usb, bounce, sizeof(bounce));
-	memcpy(buffer, bounce, size);
-#else
-	num = usb_bulk_recv(nv3p->usb, buffer, size);
-#endif
-
-	return num;
+	return usb_bulk_recv(nv3p->usb, buffer, size);
 }
 
 static ssize_t nv3p_send(struct nv3p *nv3p, const void *buffer, size_t size)
 {
-	ssize_t num;
-
-#ifdef USE_BOUNCE_BUFFER
-	memcpy(bounce, buffer, size);
-	num = usb_bulk_send(nv3p->usb, bounce, size);
-#else
-	num = usb_bulk_send(nv3p->usb, buffer, size);
-#endif
-
-	return num;
+	return usb_bulk_send(nv3p->usb, buffer, size);
 }
 
 static int nv3p_prepare_platform_info(struct nv3p *nv3p,
