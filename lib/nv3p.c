@@ -110,12 +110,6 @@ static int nv3p_recv_command(struct nv3p *nv3p, struct nv3p_packet_command *comm
 	if (num < 0)
 		return num;
 
-	uart_printf(debug, "packet: %p\n", command);
-	uart_printf(debug, "  header:\n");
-	uart_printf(debug, "    version: %08x\n", command->header.version);
-	uart_printf(debug, "    type: %08x\n", command->header.type);
-	uart_printf(debug, "    sequence: %08x\n", command->header.sequence);
-
 	return 0;
 }
 
@@ -234,8 +228,6 @@ static int nv3p_process_platform_info(struct nv3p *nv3p)
 	ssize_t num;
 	int err;
 
-	uart_printf(debug, "> %s(nv3p=%p)\n", __func__, nv3p);
-
 	err = nv3p_recv_command(nv3p, &command);
 	if (err < 0)
 		return err;
@@ -284,7 +276,6 @@ static int nv3p_process_platform_info(struct nv3p *nv3p)
 	if (num < 0)
 		return num;
 
-	uart_printf(debug, "< %s()\n", __func__);
 	return 0;
 }
 
@@ -309,9 +300,6 @@ static ssize_t nv3p_recv_data(struct nv3p *nv3p, void *buffer, size_t size)
 {
 	struct nv3p_packet_data packet;
 	ssize_t num, received = 0;
-
-	uart_printf(debug, "> %s(nv3p=%p, buffer=%p, size=%zu)\n", __func__,
-		    nv3p, buffer, size);
 
 	while (received < size) {
 		uint32_t sequence, checksum, cksum;
@@ -340,7 +328,8 @@ static ssize_t nv3p_recv_data(struct nv3p *nv3p, void *buffer, size_t size)
 			return num;
 
 		if (checksum != cksum) {
-			uart_printf(debug, "checksum mismatch: %08x (expected: %08x)\n", checksum, cksum);
+			uart_printf(debug, "bad checksum: %08x, expected: %08x\n",
+				    checksum, cksum);
 			return -EIO;
 		}
 
@@ -349,7 +338,6 @@ static ssize_t nv3p_recv_data(struct nv3p *nv3p, void *buffer, size_t size)
 			return num;
 	}
 
-	uart_printf(debug, "< %s() = %zd\n", __func__, received);
 	return received;
 }
 
@@ -364,15 +352,14 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 	if (num < 0)
 		return num;
 
-	uart_printf(debug, "nv3p_recv(): %zd\n", num);
 	sequence = command.header.sequence;
 
 	if (command.command != NV3P_COMMAND_DOWNLOAD_BCT)
 		return -EIO;
 
-	uart_printf(debug, "downloading BCT...\n");
-	uart_printf(debug, "  size: %u\n", command.size);
 	size = command.size;
+
+	uart_printf(debug, "downloading BCT (%zu bytes)...\n", size);
 
 	num = nv3p_send_ack(nv3p, sequence);
 	if (num < 0)
@@ -426,10 +413,7 @@ static int nv3p_process_bootloader(struct nv3p *nv3p, void (**entry)(void))
 	load = (void *)command.load;
 	size = command.size;
 
-	uart_printf(debug, "downloading bootloader...\n");
-	uart_printf(debug, "  %u bytes\n", (unsigned int)command.size);
-	uart_printf(debug, "  load address: %08x\n", command.load);
-	uart_printf(debug, "  entry: %08x\n", command.entry);
+	uart_printf(debug, "downloading bootloader (%zu bytes)...\n", size);
 
 	num = nv3p_send_ack(nv3p, sequence);
 	if (num < 0)
@@ -446,8 +430,6 @@ static int nv3p_process_bootloader(struct nv3p *nv3p, void (**entry)(void))
 	num = nv3p_recv_data(nv3p, load, size);
 	if (num < 0)
 		return num;
-
-	uart_printf(debug, "%zd bytes received\n", num);
 
 	num = nv3p_send_status(nv3p, sequence, "OK", NV3P_STATUS_OK, 0);
 	if (num < 0)
@@ -514,6 +496,7 @@ int nv3p_process(struct nv3p *nv3p)
 	if (err < 0)
 		return err;
 
+	uart_printf(debug, "executing bootloader at %p...\n", entry);
 	execute_bootloader(entry);
 
 	return 0;
