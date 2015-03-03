@@ -1,3 +1,4 @@
+#include <avp/bct.h>
 #include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
@@ -26,6 +27,30 @@
 #define OSC_FREQ_DET_STATUS 0x05c
 #define  OSC_FREQ_DET_BUSY (1 << 31)
 #define  OSC_FREQ_DET_CNT_MASK 0xffff
+
+#define PLLM_BASE 0x090
+#define  PLLM_BASE_ENABLE (1 << 30)
+#define  PLLM_BASE_LOCK (1 << 27)
+#define  PLLM_BASE_DIV2(x) (((x) & 0x1) << 20)
+#define  PLLM_BASE_DIVN(x) (((x) & 0xff) << 8)
+#define  PLLM_BASE_DIVM(x) (((x) & 0xff) << 0)
+
+#define PLLM_OUT 0x094
+#define  PLLM_OUT_RESET_DISABLE (1 << 0)
+
+#define PLLM_MISC1 0x098
+#define  PLLM_MISC1_PD_LSHIFT_PH135(x) (((x) & 0x1) << 30)
+#define  PLLM_MISC1_PD_LSHIFT_PH90(x) (((x) & 0x1) << 29)
+#define  PLLM_MISC1_PD_LSHIFT_PH45(x) (((x) & 0x1) << 28)
+#define  PLLM_MISC1_SETUP(x) (((x) & 0xffffff) << 0)
+
+#define PLLM_MISC2 0x09c
+#define  PLLM_MISC2_KCP(x) (((x) & 0x3) << 1)
+#define  PLLM_MISC2_KVCO(x) (((x) & 0x1) << 0)
+
+#define CLK_SOURCE_EMC 0x19c
+#define  CLK_SOURCE_EMC_2X_CLK_SRC_MASK (0x7 << 29)
+#define  CLK_SOURCE_EMC_MC_SAME_FREQ (1 << 16)
 
 struct osc_freq_entry {
 	enum osc_freq freq;
@@ -107,6 +132,59 @@ void clock_osc_init(const struct clk_rst *clk_rst)
 
 	value = SYSTEM_RATE_AHB(1) | SYSTEM_RATE_APB(0);
 	writel(value, clk_rst->base + SYSTEM_RATE);
+}
+
+void clock_pllm_init(const struct clk_rst *clk_rst,
+		     const struct bct_sdram_params *params)
+{
+	uint32_t value;
+
+	value = readl(clk_rst->base + PLLM_OUT);
+	value &= ~PLLM_OUT_RESET_DISABLE;
+	writel(value, clk_rst->base + PLLM_OUT);
+
+	value = PLLM_MISC1_PD_LSHIFT_PH135(params->pll_m_pd_lshift_ph135) |
+		PLLM_MISC1_PD_LSHIFT_PH90(params->pll_m_pd_lshift_ph90) |
+		PLLM_MISC1_PD_LSHIFT_PH45(params->pll_m_pd_lshift_ph45) |
+		PLLM_MISC1_SETUP(params->pll_m_setup_control);
+	writel(value, clk_rst->base + PLLM_MISC1);
+
+	value = PLLM_MISC2_KCP(params->pll_m_kcp) |
+		PLLM_MISC2_KVCO(params->pll_m_kvco);
+	writel(value, clk_rst->base + PLLM_MISC2);
+
+	value = PLLM_BASE_DIV2(params->pll_m_select_div2) |
+		PLLM_BASE_DIVN(params->pll_m_div_n) |
+		PLLM_BASE_DIVM(params->pll_m_div_m);
+	writel(value, clk_rst->base + PLLM_BASE);
+
+	value = readl(clk_rst->base + PLLM_BASE);
+	value |= PLLM_BASE_ENABLE;
+	writel(value, clk_rst->base + PLLM_BASE);
+
+	while (true) {
+		value = readl(clk_rst->base + PLLM_BASE);
+		if (value & PLLM_BASE_LOCK)
+			break;
+	}
+
+	/* stabilization delay */
+	udelay(10);
+
+	value = readl(clk_rst->base + PLLM_OUT);
+	value |= PLLM_OUT_RESET_DISABLE;
+	writel(value, clk_rst->base + PLLM_OUT);
+
+	value = readl(clk_rst->base + CLK_SOURCE_EMC);
+	value &= ~CLK_SOURCE_EMC_2X_CLK_SRC_MASK;
+	value |= params->emc_clock_source;
+
+	if ((params->mc_emem_arb_misc0 & CLK_SOURCE_EMC_MC_SAME_FREQ) == 0)
+		value &= ~CLK_SOURCE_EMC_MC_SAME_FREQ;
+	else
+		value |= CLK_SOURCE_EMC_MC_SAME_FREQ;
+
+	writel(value, clk_rst->base + CLK_SOURCE_EMC);
 }
 
 unsigned long clk_get_rate(const struct clk *clk)

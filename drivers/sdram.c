@@ -344,7 +344,8 @@ void sdram_init(struct bct_sdram_params *params)
 	unsigned int mc = TEGRA_MC_BASE;
 	uint32_t value;
 
-	clk_periph_set_source(&clk_emc, 0x2);
+	clock_pllm_init(&clk_rst, params);
+
 	clk_periph_enable(&clk_emc);
 	clk_periph_enable(&clk_mc);
 

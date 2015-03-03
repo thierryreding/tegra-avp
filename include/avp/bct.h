@@ -85,9 +85,9 @@ struct bct_sdram_params {
 	uint32_t pll_m_stable;
 	uint32_t pll_m_setup_control;
 	uint32_t pll_m_select_div2;
-	uint32_t pll_m_pdl_shift_ph45;
-	uint32_t pll_m_pdl_shift_ph90;
-	uint32_t pll_m_pdl_shift_ph135;
+	uint32_t pll_m_pd_lshift_ph45;
+	uint32_t pll_m_pd_lshift_ph90;
+	uint32_t pll_m_pd_lshift_ph135;
 	uint32_t pll_m_kcp;
 	uint32_t pll_m_kvco;
 	uint32_t emc_bct_spare0;

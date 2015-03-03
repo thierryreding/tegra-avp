@@ -1,6 +1,7 @@
 #ifndef AVP_CLK_RST_H
 #define AVP_CLK_RST_H
 
+struct bct_sdram_params;
 struct clk;
 
 enum osc_freq {
@@ -18,6 +19,8 @@ struct clk_rst {
 };
 
 void clock_osc_init(const struct clk_rst *clk_rst);
+void clock_pllm_init(const struct clk_rst *clk_rst,
+		     const struct bct_sdram_params *params);
 
 struct clk_ops {
 	unsigned long (*get_rate)(const struct clk *clk);
