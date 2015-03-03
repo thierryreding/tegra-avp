@@ -391,6 +391,51 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 	return 0;
 }
 
+#ifdef CONFIG_TEGRA132
+static int nv3p_process_mts(struct nv3p *nv3p)
+{
+	struct nv3p_packet_download_mts command;
+	uint32_t sequence;
+	ssize_t num;
+	size_t size;
+	void *load;
+
+	num = nv3p_recv(nv3p, &command, sizeof(command));
+	if (num < 0)
+		return num;
+
+	sequence = command.header.sequence;
+
+	if (command.command != NV3P_COMMAND_DOWNLOAD_MTS)
+		return -EIO;
+
+	load = (void *)command.load;
+	size = command.size;
+
+	uart_printf(debug, "downloading MTS (%zu bytes)...\n", size);
+
+	num = nv3p_send_ack(nv3p, sequence);
+	if (num < 0)
+		return num;
+
+	num = nv3p_recv_data(nv3p, load, size);
+	if (num < 0)
+		return num;
+
+	num = nv3p_send_status(nv3p, sequence, "OK", NV3P_STATUS_OK, 0);
+	if (num < 0)
+		return num;
+
+	num = nv3p_recv_ack(nv3p, NULL);
+	if (num < 0)
+		return num;
+
+	uart_printf(debug, "MTS downloaded to %p\n", load);
+
+	return 0;
+}
+#endif
+
 static int nv3p_process_bootloader(struct nv3p *nv3p, void (**entry)(void))
 {
 	struct nv3p_packet_download_bootloader command;
@@ -491,6 +536,12 @@ int nv3p_process(struct nv3p *nv3p)
 	err = nv3p_process_bct(nv3p);
 	if (err < 0)
 		return err;
+
+#ifdef CONFIG_TEGRA132
+	err = nv3p_process_mts(nv3p);
+	if (err < 0)
+		return err;
+#endif
 
 	err = nv3p_process_bootloader(nv3p, &entry);
 	if (err < 0)

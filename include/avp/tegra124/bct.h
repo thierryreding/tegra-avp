@@ -404,7 +404,28 @@ struct bct_bootloader_info {
 #define BCT_MAX_PARAM_SETS 4
 #define BCT_MAX_SDRAM_SETS 4
 #define BCT_MAX_BOOTLOADERS 4
+
+#ifdef CONFIG_TEGRA132
+struct bct_mts_info {
+	uint32_t version;
+	uint32_t start_block;
+	uint32_t start_page;
+	uint32_t length;
+	uint32_t load;
+	uint32_t entry;
+	uint32_t attribute;
+} __packed;
+
+#define BCT_MAX_MTS_COMPONENTS 6
+#endif
+
+#if defined(CONFIG_TEGRA124)
 #define BCT_RESERVED_SIZE 2
+#endif
+
+#if defined(CONFIG_TEGRA132)
+#define BCT_RESERVED_SIZE 341
+#endif
 
 struct bct {
 	struct bct_bad_block_table bad_blocks;
@@ -424,8 +445,15 @@ struct bct {
 	struct bct_sdram_params sdram_params[BCT_MAX_SDRAM_SETS];
 	uint32_t num_bootloaders;
 	struct bct_bootloader_info bootloaders[BCT_MAX_BOOTLOADERS];
+#ifdef CONFIG_TEGRA132
+	uint32_t num_mts_components;
+	struct bct_mts_info mts_components[BCT_MAX_MTS_COMPONENTS];
+#endif
 	uint8_t enable_fail_back;
 	uint8_t secure_jtag_control;
+#ifdef CONFIG_TEGRA132
+	uint8_t customer_denver_dfd_enable;
+#endif
 	uint8_t reserved[BCT_RESERVED_SIZE];
 } __packed;
 

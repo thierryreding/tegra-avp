@@ -17,6 +17,7 @@ struct usb;
 #define NV3P_COMMAND_DOWNLOAD_BCT 0x04
 #define NV3P_COMMAND_DOWNLOAD_BOOTLOADER 0x06
 #define NV3P_COMMAND_STATUS 0x0a
+#define NV3P_COMMAND_DOWNLOAD_MTS 0x33
 
 #define NV3P_STATUS_OK 0x00
 
@@ -38,6 +39,15 @@ struct nv3p_packet_download_bct {
 	uint32_t length;
 	uint32_t command;
 	uint32_t size;
+	uint32_t checksum;
+};
+
+struct nv3p_packet_download_mts {
+	struct nv3p_header header;
+	uint32_t length;
+	uint32_t command;
+	uint32_t size;
+	uint32_t load;
 	uint32_t checksum;
 };
 
