@@ -286,7 +286,9 @@ static ssize_t nv3p_recv_data_chunk(struct nv3p *nv3p, void *buffer,
 	ssize_t num;
 
 	while (received < size) {
-		num = nv3p_recv(nv3p, buffer + received, chunk);
+		size_t max = min(chunk, size - received);
+
+		num = nv3p_recv(nv3p, buffer + received, max);
 		if (num < 0)
 			return num;
 
