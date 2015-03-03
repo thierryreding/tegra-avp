@@ -109,8 +109,6 @@ void car_apply(void)
 	*/
 }
 
-#define RELEASE "2015.02-wip"
-
 void start(void)
 {
 	struct nv3p nv3p;
@@ -121,7 +119,9 @@ void start(void)
 	car_apply();
 
 	uart_init(debug);
-	uart_puts(debug, "AVP " RELEASE "\n");
+	uart_puts(debug, "\n");
+	uart_puts(debug, "NVIDIA Tegra Miniloader v" CONFIG_RELEASE "\n");
+	uart_puts(debug, "\n");
 
 	usb_init(&usbd);
 	usb_enumerate(&usbd);

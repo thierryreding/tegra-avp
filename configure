@@ -99,6 +99,8 @@ echo "#ifndef CONFIG_H" >&3
 echo "#define CONFIG_H" >&3
 echo "" >&3
 
+echo "#define CONFIG_RELEASE \"2015.03-wip\"" >&3
+
 if test "x$debug" = "xyes"; then
 	echo "#define CONFIG_DEBUG 1" >&3
 else
