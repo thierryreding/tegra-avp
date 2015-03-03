@@ -12,6 +12,23 @@
 #include <avp/uart.h>
 #include <avp/usb.h>
 
+static void clk_rst_init(const struct clk_rst *clk_rst)
+{
+	clock_osc_init(clk_rst);
+
+	/* use pll_p_out0 as source */
+	clk_periph_set_source(&clk_uartd, 0);
+	clk_periph_enable(&clk_uartd);
+	reset_assert(&rst_uartd);
+	reset_deassert(&rst_uartd);
+
+	/*
+	clk_periph_enable(&car, &clk_usbd);
+	reset_assert(&car, &rst_usbd);
+	reset_deassert(&car, &rst_usbd);
+	*/
+}
+
 #define GEN1_I2C_SDA 0x31a0
 #define GEN1_I2C_SCL 0x31a4
 
@@ -86,37 +103,20 @@ static const struct pinmux_config pinmux_configs[] = {
 	PINMUX_CONFIG(KB_ROW10,     UARTA,  NORMAL, NORMAL, ENABLE,  DISABLE, DISABLE),
 };
 
-void pinmux_apply(void)
+static void pinmux_init(struct pinmux *pinmux)
 {
 	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(pinmux_configs); i++)
-		pinmux_config_apply(&pinmux, &pinmux_configs[i]);
-}
-
-void car_apply(void)
-{
-	/* use pll_p_out0 as source */
-	clk_periph_set_source(&clk_uartd, 0);
-	clk_periph_enable(&clk_uartd);
-	reset_assert(&rst_uartd);
-	reset_deassert(&rst_uartd);
-
-	/*
-	clk_periph_enable(&car, &clk_usbd);
-	reset_assert(&car, &rst_usbd);
-	reset_deassert(&car, &rst_usbd);
-	*/
+		pinmux_config_apply(pinmux, &pinmux_configs[i]);
 }
 
 void start(void)
 {
 	struct nv3p nv3p;
 
-	clock_osc_init(&clk_rst);
-
-	pinmux_apply();
-	car_apply();
+	clk_rst_init(&clk_rst);
+	pinmux_init(&pinmux);
 
 	uart_init(debug);
 	uart_puts(debug, "\n");
@@ -129,6 +129,7 @@ void start(void)
 	nv3p_init(&nv3p, &usbd);
 	nv3p_process(&nv3p);
 
+	/* should never get here */
 	uart_flush(debug);
 	pmc_reset(&pmc, PMC_RESET_MODE_RCM);
 
