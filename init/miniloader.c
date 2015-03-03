@@ -12,23 +12,6 @@
 #include <avp/uart.h>
 #include <avp/usb.h>
 
-static void clk_rst_init(const struct clk_rst *clk_rst)
-{
-	clock_osc_init(clk_rst);
-
-	/* use pll_p_out0 as source */
-	clk_periph_set_source(&clk_uartd, 0);
-	clk_periph_enable(&clk_uartd);
-	reset_assert(&rst_uartd);
-	reset_deassert(&rst_uartd);
-
-	/*
-	clk_periph_enable(&car, &clk_usbd);
-	reset_assert(&car, &rst_usbd);
-	reset_deassert(&car, &rst_usbd);
-	*/
-}
-
 #define GEN1_I2C_SDA 0x31a0
 #define GEN1_I2C_SCL 0x31a4
 
@@ -115,7 +98,7 @@ void start(void)
 {
 	struct nv3p nv3p;
 
-	clk_rst_init(&clk_rst);
+	clock_osc_init(&clk_rst);
 	pinmux_init(&pinmux);
 
 	uart_init(debug);

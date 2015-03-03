@@ -346,8 +346,8 @@ void sdram_init(struct bct_sdram_params *params)
 
 	clock_pllm_init(&clk_rst, params);
 
-	clk_periph_enable(&clk_emc);
-	clk_periph_enable(&clk_mc);
+	clock_periph_enable(&clk_emc);
+	clock_periph_enable(&clk_mc);
 
 	reset_deassert(&rst_emc);
 	reset_deassert(&rst_mc);
@@ -395,11 +395,10 @@ void sdram_init(struct bct_sdram_params *params)
 		writel(params->emc_bct_spare1, params->emc_bct_spare0);
 	}
 
-	/* XXX set clock source */
-	clk_periph_enable(&clk_emc);
+	clock_periph_enable(&clk_emc);
 	reset_deassert(&rst_emc);
 
-	clk_periph_enable(&clk_mc);
+	clock_periph_enable(&clk_mc);
 	reset_deassert(&rst_mc);
 
 	udelay(5);

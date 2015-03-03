@@ -187,22 +187,23 @@ void clock_pllm_init(const struct clk_rst *clk_rst,
 	writel(value, clk_rst->base + CLK_SOURCE_EMC);
 }
 
-unsigned long clk_get_rate(const struct clk *clk)
+unsigned long clock_get_rate(const struct clock *clk)
 {
 	return clk->ops->get_rate(clk);
 }
 
-void clk_periph_enable(const struct clk_periph *clk)
+void clock_periph_enable(const struct clock_periph *clk)
 {
 	writel(1 << clk->bit, clk->base.clk_rst->base + clk->set);
 }
 
-void clk_periph_disable(const struct clk_periph *clk)
+void clock_periph_disable(const struct clock_periph *clk)
 {
 	writel(1 << clk->bit, clk->base.clk_rst->base + clk->clr);
 }
 
-void clk_periph_set_source(const struct clk_periph *clk, unsigned int source)
+void clock_periph_set_source(const struct clock_periph *clk,
+			     unsigned int source)
 {
 	unsigned long value;
 
@@ -226,7 +227,7 @@ const struct clk_rst clk_rst = {
 	.base = TEGRA_CLK_RST_BASE,
 };
 
-const struct clk_periph clk_usbd = {
+const struct clock_periph clk_usbd = {
 	.base = {
 		.clk_rst = &clk_rst,
 	},
@@ -236,7 +237,7 @@ const struct clk_periph clk_usbd = {
 	.src = 0x000,
 };
 
-const struct clk_periph clk_mc = {
+const struct clock_periph clk_mc = {
 	.base = {
 		.clk_rst = &clk_rst,
 	},
@@ -246,7 +247,7 @@ const struct clk_periph clk_mc = {
 	.src = 0x000,
 };
 
-const struct clk_periph clk_emc = {
+const struct clock_periph clk_emc = {
 	.base = {
 		.clk_rst = &clk_rst,
 	},
@@ -256,7 +257,17 @@ const struct clk_periph clk_emc = {
 	.src = 0x19c,
 };
 
-const struct clk_periph clk_uartd = {
+const struct clock_periph clk_uarta = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x320,
+	.clr = 0x324,
+	.bit = 6,
+	.src = 0x178,
+};
+
+const struct clock_periph clk_uartd = {
 	.base = {
 		.clk_rst = &clk_rst,
 	},
@@ -285,6 +296,13 @@ const struct reset rst_emc = {
 	.set = 0x308,
 	.clr = 0x30c,
 	.bit = 25,
+};
+
+const struct reset rst_uarta = {
+	.clk_rst = &clk_rst,
+	.set = 0x300,
+	.clr = 0x304,
+	.bit = 6,
 };
 
 const struct reset rst_uartd = {

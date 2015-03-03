@@ -35,9 +35,14 @@
 
 void uart_init(struct uart *uart)
 {
-	unsigned long rate = clk_get_rate(&clk_pllp);
+	unsigned long rate = clock_get_rate(&clk_pllp);
 	unsigned int divisor;
 	uint8_t dll, dlh;
+
+	clock_periph_set_source(uart->clk, 0);
+	clock_periph_enable(uart->clk);
+	reset_assert(uart->rst);
+	reset_deassert(uart->rst);
 
 	divisor = rate / (uart->baud * 16);
 	dll = (divisor >> 0) & 0xff;
@@ -173,11 +178,19 @@ void uart_flush(struct uart *uart)
 struct uart uarta = {
 	.base = TEGRA_UARTA_BASE,
 	.baud = 115200,
+	.clk = &clk_uarta,
+	.rst = &rst_uarta,
 };
 
 struct uart uartd = {
 	.base = TEGRA_UARTD_BASE,
 	.baud = 115200,
+	.clk = &clk_uartd,
+	.rst = &rst_uartd,
 };
 
+#if defined(CONFIG_TEGRA132)
+struct uart *debug = &uarta;
+#else
 struct uart *debug = &uartd;
+#endif

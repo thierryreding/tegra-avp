@@ -4,9 +4,14 @@
 #include <stdbool.h>
 #include <types.h>
 
+#include <avp/clk-rst.h>
+
 struct uart {
 	unsigned long base;
 	unsigned long baud;
+
+	const struct clock_periph *clk;
+	const struct reset *rst;
 };
 
 void uart_init(struct uart *uart);
