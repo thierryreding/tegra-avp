@@ -202,14 +202,17 @@ void clock_periph_disable(const struct clock_periph *clk)
 	writel(1 << clk->bit, clk->base.clk_rst->base + clk->clr);
 }
 
-void clock_periph_set_source(const struct clock_periph *clk,
-			     unsigned int source)
+void clock_periph_set_source_divisor(const struct clock_periph *clk,
+				     unsigned int source,
+				     unsigned int divisor)
 {
 	unsigned long value;
 
 	value = readl(clk->base.clk_rst->base + clk->src);
 	value &= ~(0x7 << 29);
 	value |= source << 29;
+	value &= ~0xffff;
+	value |= divisor & 0xffff;
 	writel(value, clk->base.clk_rst->base + clk->src);
 }
 
@@ -225,6 +228,25 @@ void reset_deassert(const struct reset *rst)
 
 const struct clk_rst clk_rst = {
 	.base = TEGRA_CLK_RST_BASE,
+};
+
+const struct clock_periph clk_cpu = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x320,
+	.clr = 0x324,
+	.bit = 0,
+};
+
+const struct clock_periph clk_uarta = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x320,
+	.clr = 0x324,
+	.bit = 6,
+	.src = 0x178,
 };
 
 const struct clock_periph clk_usbd = {
@@ -247,6 +269,16 @@ const struct clock_periph clk_mc = {
 	.src = 0x000,
 };
 
+const struct clock_periph clk_i2c5 = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x328,
+	.clr = 0x32c,
+	.bit = 15,
+	.src = 0x128,
+};
+
 const struct clock_periph clk_emc = {
 	.base = {
 		.clk_rst = &clk_rst,
@@ -257,16 +289,6 @@ const struct clock_periph clk_emc = {
 	.src = 0x19c,
 };
 
-const struct clock_periph clk_uarta = {
-	.base = {
-		.clk_rst = &clk_rst,
-	},
-	.set = 0x320,
-	.clr = 0x324,
-	.bit = 6,
-	.src = 0x178,
-};
-
 const struct clock_periph clk_uartd = {
 	.base = {
 		.clk_rst = &clk_rst,
@@ -275,6 +297,56 @@ const struct clock_periph clk_uartd = {
 	.clr = 0x334,
 	.bit = 1,
 	.src = 0x1c0,
+};
+
+const struct clock_periph clk_csite = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x330,
+	.clr = 0x334,
+	.bit = 9,
+};
+
+const struct clock_periph clk_cpug = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x440,
+	.clr = 0x444,
+	.bit = 0,
+};
+
+const struct clock_periph clk_cpulp = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x440,
+	.clr = 0x444,
+	.bit = 1,
+};
+
+const struct clock_periph clk_mselect = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x440,
+	.clr = 0x444,
+	.bit = 3,
+};
+
+const struct reset rst_cpu = {
+	.clk_rst = &clk_rst,
+	.set = 0x300,
+	.clr = 0x304,
+	.bit = 0,
+};
+
+const struct reset rst_uarta = {
+	.clk_rst = &clk_rst,
+	.set = 0x300,
+	.clr = 0x304,
+	.bit = 6,
 };
 
 const struct reset rst_usbd = {
@@ -291,6 +363,13 @@ const struct reset rst_mc = {
 	.bit = 0,
 };
 
+const struct reset rst_i2c5 = {
+	.clk_rst = &clk_rst,
+	.set = 0x308,
+	.clr = 0x30c,
+	.bit = 15,
+};
+
 const struct reset rst_emc = {
 	.clk_rst = &clk_rst,
 	.set = 0x308,
@@ -298,16 +377,16 @@ const struct reset rst_emc = {
 	.bit = 25,
 };
 
-const struct reset rst_uarta = {
-	.clk_rst = &clk_rst,
-	.set = 0x300,
-	.clr = 0x304,
-	.bit = 6,
-};
-
 const struct reset rst_uartd = {
 	.clk_rst = &clk_rst,
 	.set = 0x310,
 	.clr = 0x314,
 	.bit = 1,
+};
+
+const struct reset rst_mselect = {
+	.clk_rst = &clk_rst,
+	.set = 0x430,
+	.clr = 0x434,
+	.bit = 3,
 };

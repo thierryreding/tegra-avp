@@ -1,0 +1,13 @@
+This is a dummy bootloader that will spew 'A' characters on UART A. It
+can be used as bootloader, passed to tegrarcm via the --bootloader and
+--loadaddr options to test that the CPU runs in AArch64 mode.
+
+The text base is fixed to 0x80108000.
+
+Build using:
+
+	$ make CROSS_COMPILE=aarch64-unknown-linux-gnu-
+
+Use with tegrarcm like so:
+
+	# tegrarcm ... --miniloader bootloader.bin --loadaddr 0x80108000

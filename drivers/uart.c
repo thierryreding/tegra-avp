@@ -39,7 +39,7 @@ void uart_init(struct uart *uart)
 	unsigned int divisor;
 	uint8_t dll, dlh;
 
-	clock_periph_set_source(uart->clk, 0);
+	clock_periph_set_source_divisor(uart->clk, 0, 0);
 	clock_periph_enable(uart->clk);
 	reset_assert(uart->rst);
 	reset_deassert(uart->rst);

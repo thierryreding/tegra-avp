@@ -45,8 +45,9 @@ struct clock_periph {
 
 void clock_periph_enable(const struct clock_periph *clk);
 void clock_periph_disable(const struct clock_periph *clk);
-void clock_periph_set_source(const struct clock_periph *clk,
-			     unsigned int source);
+void clock_periph_set_source_divisor(const struct clock_periph *clk,
+				     unsigned int source,
+				     unsigned int divisor);
 
 struct reset {
 	const struct clk_rst *clk_rst;
@@ -63,16 +64,28 @@ extern const struct clk_rst clk_rst;
 
 extern const struct clock clk_pllp;
 
+extern const struct clock_periph clk_cpu;
+extern const struct clock_periph clk_uarta;
 extern const struct clock_periph clk_usbd;
 extern const struct clock_periph clk_mc;
+extern const struct clock_periph clk_i2c5;
 extern const struct clock_periph clk_emc;
-extern const struct clock_periph clk_uarta;
 extern const struct clock_periph clk_uartd;
+extern const struct clock_periph clk_csite;
+extern const struct clock_periph clk_cpug;
+extern const struct clock_periph clk_cpulp;
+extern const struct clock_periph clk_mselect;
 
+extern const struct reset rst_cpu;
+extern const struct reset rst_uarta;
 extern const struct reset rst_usbd;
 extern const struct reset rst_mc;
+extern const struct reset rst_i2c5;
 extern const struct reset rst_emc;
-extern const struct reset rst_uarta;
 extern const struct reset rst_uartd;
+extern const struct reset rst_mselect;
+
+void clock_cpu_setup(const struct clk_rst *clk_rst);
+void reset_cpu_deassert(const struct clk_rst *clk_rst);
 
 #endif

@@ -12,7 +12,7 @@ usage()
 	echo "  --debug      build debug version"
 }
 
-soc=tegra124
+soc=tegra132
 debug=yes
 
 while test $# -gt 0; do

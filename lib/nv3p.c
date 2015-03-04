@@ -6,6 +6,8 @@
 #include <usb.h>
 
 #include <avp/bct.h>
+#include <avp/cpu.h>
+#include <avp/flow.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
 #include <avp/sdram.h>
@@ -438,7 +440,7 @@ static int nv3p_process_mts(struct nv3p *nv3p)
 }
 #endif
 
-static int nv3p_process_bootloader(struct nv3p *nv3p, void (**entry)(void))
+static int nv3p_process_bootloader(struct nv3p *nv3p, uint32_t *entry)
 {
 	struct nv3p_packet_download_bootloader command;
 	uint32_t sequence;
@@ -487,7 +489,7 @@ static int nv3p_process_bootloader(struct nv3p *nv3p, void (**entry)(void))
 		return num;
 
 	if (entry)
-		*entry = (void (*)(void))command.entry;
+		*entry = command.entry;
 
 	return 0;
 }
@@ -499,28 +501,13 @@ int nv3p_init(struct nv3p *nv3p, struct usb *usb)
 	return 0;
 }
 
-static void __naked execute_bootloader(void *entry)
+static void __naked __maybe_unused execute_bootloader(uint32_t entry)
 {
 	asm (
+		/* disable interrupts */
 		"mrs r1, cpsr\n"
 		"orr r1, r1, #0xc0\n"
 		"msr cpsr, r1\n"
-
-		/*
-		"ldr r1, =0x60005000\n"
-		"mov r2, #0\n"
-		"str r2, [r1, #0x08]\n"
-
-		"ldr r1, =0x6000f200\n"
-		"str r2, [r1, #0x18]\n"
-		"str r2, [r2, #0x08]\n"
-		*/
-
-		/*
-		"stmfd sp!, {r0}\n"
-		"bl invalidate\n"
-		"ldmfd sp!, {r0}\n"
-		*/
 
 		"bx r0\n"
 	);
@@ -528,7 +515,7 @@ static void __naked execute_bootloader(void *entry)
 
 int nv3p_process(struct nv3p *nv3p)
 {
-	void (*entry)(void);
+	uint32_t entry;
 	int err;
 
 	err = nv3p_process_platform_info(nv3p);
@@ -549,7 +536,10 @@ int nv3p_process(struct nv3p *nv3p)
 	if (err < 0)
 		return err;
 
-	uart_printf(debug, "executing bootloader at %p...\n", entry);
+	if (start_cpu(entry))
+		flow_halt_avp(&flow);
+
+	uart_printf(debug, "executing bootloader at %08x...\n", entry);
 	execute_bootloader(entry);
 
 	return 0;
