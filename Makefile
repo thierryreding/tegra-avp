@@ -67,6 +67,7 @@ obj-y += core/
 obj-y += drivers/
 obj-y += lib/
 obj-y += init/
+obj-y += boards/
 
 subdirs = $(patsubst %/,%,$(filter %/,$(obj-y)))
 objs = $(patsubst %,%/built-in.o,$(subdirs))

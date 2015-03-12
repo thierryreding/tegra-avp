@@ -9,4 +9,8 @@
 #include <avp/tegra124/bct.h>
 #endif
 
+#if defined(CONFIG_TEGRA210)
+#include <avp/tegra210/bct.h>
+#endif
+
 #endif

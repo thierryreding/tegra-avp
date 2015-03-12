@@ -1,4 +1,3 @@
-#include <avp/bct.h>
 #include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
@@ -28,29 +27,32 @@
 #define  OSC_FREQ_DET_BUSY (1 << 31)
 #define  OSC_FREQ_DET_CNT_MASK 0xffff
 
-#define PLLM_BASE 0x090
-#define  PLLM_BASE_ENABLE (1 << 30)
-#define  PLLM_BASE_LOCK (1 << 27)
-#define  PLLM_BASE_DIV2(x) (((x) & 0x1) << 20)
-#define  PLLM_BASE_DIVN(x) (((x) & 0xff) << 8)
-#define  PLLM_BASE_DIVM(x) (((x) & 0xff) << 0)
+#define SPARE_REG0 0x55c
+#define  SPARE_REG_CLK_M_DIVISOR(x) (((x) & 0x3) << 2)
 
-#define PLLM_OUT 0x094
-#define  PLLM_OUT_RESET_DISABLE (1 << 0)
+/* XXX Tegra210, move elsewhere */
+#define PLLMB_BASE 0x5e8
+#define  PLLMB_BASE_ENABLE (1 << 30)
 
-#define PLLM_MISC1 0x098
-#define  PLLM_MISC1_PD_LSHIFT_PH135(x) (((x) & 0x1) << 30)
-#define  PLLM_MISC1_PD_LSHIFT_PH90(x) (((x) & 0x1) << 29)
-#define  PLLM_MISC1_PD_LSHIFT_PH45(x) (((x) & 0x1) << 28)
-#define  PLLM_MISC1_SETUP(x) (((x) & 0xffffff) << 0)
+#define SCLK_BURST_POLICY 0x028
+#define  SCLK_BURST_POLICY_SYS_STATE_RUN (2 << 28)
+#define  SCLK_BURST_POLICY_COP_AUTO_SWAKEUP_FROM_FIQ (1 << 27)
+#define  SCLK_BURST_POLICY_CPU_AUTO_SWAKEUP_FROM_FIQ (1 << 26)
+#define  SCLK_BURST_POLICY_COP_AUTO_SWAKEUP_FROM_IRQ (1 << 25)
+#define  SCLK_BURST_POLICY_CPU_AUTO_SWAKEUP_FROM_IRQ (1 << 24)
+#define  SCLK_BURST_POLICY_SWAKEUP_FIQ_SOURCE_PLLP_OUT2 (4 << 12)
+#define  SCLK_BURST_POLICY_SWAKEUP_IRQ_SOURCE_PLLP_OUT2 (4 <<  8)
+#define  SCLK_BURST_POLICY_SWAKEUP_RUN_SOURCE_PLLP_OUT2 (4 <<  4)
+#define  SCLK_BURST_POLICY_SWAKEUP_IDLE_SOURCE_PLLP_OUT2 (4 <<  0)
 
-#define PLLM_MISC2 0x09c
-#define  PLLM_MISC2_KCP(x) (((x) & 0x3) << 1)
-#define  PLLM_MISC2_KVCO(x) (((x) & 0x1) << 0)
-
-#define CLK_SOURCE_EMC 0x19c
-#define  CLK_SOURCE_EMC_2X_CLK_SRC_MASK (0x7 << 29)
-#define  CLK_SOURCE_EMC_MC_SAME_FREQ (1 << 16)
+#define SUPER_SCLK_DIVIDER 0x02c
+#define  SUPER_SCLK_DIVIDER_ENABLE (1 << 31)
+#define  SUPER_SCLK_DIVIDER_DISABLE_FROM_COP_FIQ (1 << 27)
+#define  SUPER_SCLK_DIVIDER_DISABLE_FROM_CPU_FIQ (1 << 26)
+#define  SUPER_SCLK_DIVIDER_DISABLE_FROM_COP_IRQ (1 << 25)
+#define  SUPER_SCLK_DIVIDER_DISABLE_FROM_CPU_IRQ (1 << 24)
+#define  SUPER_SCLK_DIVIDER_DIVIDEND(n) (((n) & 0xff) << 8)
+#define  SUPER_SCLK_DIVIDER_DIVISOR(n) (((n) & 0xff) << 0)
 
 struct osc_freq_entry {
 	enum osc_freq freq;
@@ -104,8 +106,6 @@ void clock_osc_init(const struct clk_rst *clk_rst)
 		freq = OSC_FREQ_12;
 	}
 
-	timer_us_init(freq);
-
 	switch (freq) {
 	case OSC_FREQ_13:
 	case OSC_FREQ_16_8:
@@ -125,66 +125,57 @@ void clock_osc_init(const struct clk_rst *clk_rst)
 		break;
 	}
 
+#ifdef CONFIG_TEGRA210
+	/*
+	 * Tegra210 has a bug where changing the PLL reference clock divider
+	 * doesn't work as expected when changing from 0 to 2. Future chips
+	 * should have a fix for this, fortunately.
+	 */
+	value = readl(clk_rst->base + SPARE_REG0);
+	value |= SPARE_REG_CLK_M_DIVISOR(1);
+	writel(value, clk_rst->base + SPARE_REG0);
+
+	pll_ref_div = OSC_CTRL_PLL_REF_DIV1;
+	timer_us_init(OSC_FREQ_19_2);
+#else
+	timer_us_init(freq);
+#endif
+
 	value = OSC_CTRL_FREQ(freq) | pll_ref_div | OSC_CTRL_SPARE(0) |
 		OSC_CTRL_DUTY_CYCLE(0) | OSC_CTRL_DRIVE_STRENGTH(1) |
 		OSC_CTRL_ENABLE;
 	writel(value, clk_rst->base + OSC_CTRL);
 
+#ifdef CONFIG_TEGRA210
+	value = readl(TEGRA_APB_MISC_BASE + 0x810);
+	value &= ~(0x3 << 24);
+	value |= 2 << 24;
+	writel(value, TEGRA_APB_MISC_BASE + 0x810);
+#endif
+
 	value = SYSTEM_RATE_AHB(1) | SYSTEM_RATE_APB(0);
 	writel(value, clk_rst->base + SYSTEM_RATE);
-}
 
-void clock_pllm_init(const struct clk_rst *clk_rst,
-		     const struct bct_sdram_params *params)
-{
-	uint32_t value;
+#ifdef CONFIG_TEGRA210
+	value = readl(clk_rst->base + PLLMB_BASE);
+	value &= ~PLLMB_BASE_ENABLE;
+	writel(value, clk_rst->base + PLLMB_BASE);
 
-	value = readl(clk_rst->base + PLLM_OUT);
-	value &= ~PLLM_OUT_RESET_DISABLE;
-	writel(value, clk_rst->base + PLLM_OUT);
+	value = SCLK_BURST_POLICY_SYS_STATE_RUN |
+		SCLK_BURST_POLICY_SWAKEUP_FIQ_SOURCE_PLLP_OUT2 |
+		SCLK_BURST_POLICY_SWAKEUP_IRQ_SOURCE_PLLP_OUT2 |
+		SCLK_BURST_POLICY_SWAKEUP_RUN_SOURCE_PLLP_OUT2 |
+		SCLK_BURST_POLICY_SWAKEUP_IDLE_SOURCE_PLLP_OUT2;
+	writel(value, clk_rst->base + SCLK_BURST_POLICY);
 
-	value = PLLM_MISC1_PD_LSHIFT_PH135(params->pll_m_pd_lshift_ph135) |
-		PLLM_MISC1_PD_LSHIFT_PH90(params->pll_m_pd_lshift_ph90) |
-		PLLM_MISC1_PD_LSHIFT_PH45(params->pll_m_pd_lshift_ph45) |
-		PLLM_MISC1_SETUP(params->pll_m_setup_control);
-	writel(value, clk_rst->base + PLLM_MISC1);
+	value = SUPER_SCLK_DIVIDER_ENABLE |
+		SUPER_SCLK_DIVIDER_DIVIDEND(0) |
+		SUPER_SCLK_DIVIDER_DIVISOR(1);
+	writel(value, clk_rst->base + SUPER_SCLK_DIVIDER);
 
-	value = PLLM_MISC2_KCP(params->pll_m_kcp) |
-		PLLM_MISC2_KVCO(params->pll_m_kvco);
-	writel(value, clk_rst->base + PLLM_MISC2);
-
-	value = PLLM_BASE_DIV2(params->pll_m_select_div2) |
-		PLLM_BASE_DIVN(params->pll_m_div_n) |
-		PLLM_BASE_DIVM(params->pll_m_div_m);
-	writel(value, clk_rst->base + PLLM_BASE);
-
-	value = readl(clk_rst->base + PLLM_BASE);
-	value |= PLLM_BASE_ENABLE;
-	writel(value, clk_rst->base + PLLM_BASE);
-
-	while (true) {
-		value = readl(clk_rst->base + PLLM_BASE);
-		if (value & PLLM_BASE_LOCK)
-			break;
-	}
-
-	/* stabilization delay */
-	udelay(10);
-
-	value = readl(clk_rst->base + PLLM_OUT);
-	value |= PLLM_OUT_RESET_DISABLE;
-	writel(value, clk_rst->base + PLLM_OUT);
-
-	value = readl(clk_rst->base + CLK_SOURCE_EMC);
-	value &= ~CLK_SOURCE_EMC_2X_CLK_SRC_MASK;
-	value |= params->emc_clock_source;
-
-	if ((params->mc_emem_arb_misc0 & CLK_SOURCE_EMC_MC_SAME_FREQ) == 0)
-		value &= ~CLK_SOURCE_EMC_MC_SAME_FREQ;
-	else
-		value |= CLK_SOURCE_EMC_MC_SAME_FREQ;
-
-	writel(value, clk_rst->base + CLK_SOURCE_EMC);
+	value = SYSTEM_RATE_APB(1);
+	writel(value, clk_rst->base + SYSTEM_RATE);
+#endif
 }
 
 unsigned long clock_get_rate(const struct clock *clk)
@@ -335,6 +326,15 @@ const struct clock_periph clk_mselect = {
 	.bit = 3,
 };
 
+const struct clock_periph clk_dvfs = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x448,
+	.clr = 0x44c,
+	.bit = 27,
+};
+
 const struct reset rst_cpu = {
 	.clk_rst = &clk_rst,
 	.set = 0x300,
@@ -389,4 +389,11 @@ const struct reset rst_mselect = {
 	.set = 0x430,
 	.clr = 0x434,
 	.bit = 3,
+};
+
+const struct reset rst_dvfs = {
+	.clk_rst = &clk_rst,
+	.set = 0x438,
+	.clr = 0x43c,
+	.bit = 27,
 };

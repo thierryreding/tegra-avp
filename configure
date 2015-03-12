@@ -12,7 +12,7 @@ usage()
 	echo "  --debug      build debug version"
 }
 
-soc=tegra132
+soc=tegra210
 debug=yes
 
 while test $# -gt 0; do
@@ -62,6 +62,10 @@ case $soc in
 		text_base=0x4000f000
 		;;
 
+	tegra210)
+		text_base=0x40010000
+		;;
+
 	*)
 		echo "unsupported SoC: $soc"
 		exit 1
@@ -96,6 +100,12 @@ if test "x$soc" != "xtegra132"; then
 	echo "# CONFIG_TEGRA132 is not set" >&3
 else
 	echo "CONFIG_TEGRA132=y" >&3
+fi
+
+if test "x$soc" != "xtegra210"; then
+	echo "# CONFIG_TEGRA210 is not set" >&3
+else
+	echo "CONFIG_TEGRA210=y" >&3
 fi
 
 exec 3>&-
@@ -133,6 +143,12 @@ if test "x$soc" = "xtegra132"; then
 	echo "#define CONFIG_TEGRA132 1" >&3
 else
 	echo "#undef CONFIG_TEGRA132" >&3
+fi
+
+if test "x$soc" = "xtegra210"; then
+	echo "#define CONFIG_TEGRA210 1" >&3
+else
+	echo "#undef CONFIG_TEGRA210" >&3
 fi
 
 echo "" >&3

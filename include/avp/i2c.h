@@ -16,6 +16,8 @@ struct i2c {
 int i2c_init(struct i2c *i2c, unsigned int speed);
 int i2c_smbus_write_byte_data(struct i2c *i2c, uint8_t address,
 			      uint8_t command, uint8_t value);
+int i2c_smbus_read_byte_data(struct i2c *i2c, uint8_t address,
+			     uint8_t command, uint8_t *valuep);
 
 extern struct i2c dvc;
 

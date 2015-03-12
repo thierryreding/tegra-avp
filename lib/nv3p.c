@@ -363,7 +363,8 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 
 	size = command.size;
 
-	uart_printf(debug, "downloading BCT (%zu bytes)...\n", size);
+	uart_printf(debug, "downloading BCT (%zu bytes, %zu)...\n", size, sizeof(bct));
+	uart_printf(debug, "  SDRAM params: %zu\n", sizeof(struct bct_sdram_params));
 
 	num = nv3p_send_ack(nv3p, sequence);
 	if (num < 0)
@@ -382,9 +383,16 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 		return num;
 
 	if (1) {
+#ifdef CONFIG_TEGRA210
+#define APB_MISC_PP_STRAPPING_OPT_A 0x00
+		uint32_t value = readl(TEGRA_APB_MISC_BASE + APB_MISC_PP_STRAPPING_OPT_A);
+		unsigned int index = (value >> 4) & 0x3;
+#else
 		uint32_t value = readl(TEGRA_PMC_BASE + PMC_STRAPPING_OPT_A);
 		unsigned int index = (value >> 4) & 0x3;
+#endif
 
+		uart_printf(debug, "index: %u\n", index);
 		sdram_init(&bct.sdram_params[index]);
 
 		/*

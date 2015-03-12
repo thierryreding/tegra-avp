@@ -14,14 +14,25 @@
 #define  FLOW_CTLR_RAM_REPAIR_STS (1 << 1)
 #define  FLOW_CTLR_RAM_REPAIR_REQ (1 << 0)
 
+#define FLOW_CTLR_BPMP_CLUSTER_CONTROL 0x098
+
 void flow_set_active_cluster(struct flow *flow, enum flow_cluster_id id)
 {
 	uint32_t value;
 
+#ifdef CONFIG_TEGRA210
+	value = readl(flow->base + FLOW_CTLR_BPMP_CLUSTER_CONTROL);
+#else
 	value = readl(flow->base + FLOW_CTLR_CLUSTER_CONTROL);
+#endif
+	uart_printf(debug, "FLOW_CTLR_CLUSTER_CONTROL: %08x\n", value);
 	value &= ~FLOW_CTLR_CLUSTER_CONTROL_ACTIVE_MASK;
 	value |= FLOW_CTLR_CLUSTER_CONTROL_ACTIVE(id);
+#ifdef CONFIG_TEGRA210
+	writel(value, flow->base + FLOW_CTLR_BPMP_CLUSTER_CONTROL);
+#else
 	writel(value, flow->base + FLOW_CTLR_CLUSTER_CONTROL);
+#endif
 }
 
 void flow_repair_ram(struct flow *flow)

@@ -26,6 +26,62 @@ const struct clock clk_pllp = {
 	.ops = &pllp_ops,
 };
 
+void clock_pllm_init(const struct clk_rst *clk_rst,
+		     const struct bct_sdram_params *params)
+{
+	uint32_t value;
+
+	value = readl(clk_rst->base + PLLM_OUT);
+	value &= ~PLLM_OUT_RESET_DISABLE;
+	writel(value, clk_rst->base + PLLM_OUT);
+
+	value = PLLM_MISC1_PD_LSHIFT_PH135(params->pll_m_pd_lshift_ph135) |
+		PLLM_MISC1_PD_LSHIFT_PH90(params->pll_m_pd_lshift_ph90) |
+		PLLM_MISC1_PD_LSHIFT_PH45(params->pll_m_pd_lshift_ph45) |
+		PLLM_MISC1_SETUP(params->pll_m_setup_control);
+	writel(value, clk_rst->base + PLLM_MISC1);
+
+	value = PLLM_MISC2_KCP(params->pll_m_kcp) |
+		PLLM_MISC2_KVCO(params->pll_m_kvco);
+	writel(value, clk_rst->base + PLLM_MISC2);
+
+	value = PLLM_BASE_DIV2(params->pll_m_select_div2) |
+		PLLM_BASE_DIVN(params->pll_m_div_n) |
+		PLLM_BASE_DIVM(params->pll_m_div_m);
+	writel(value, clk_rst->base + PLLM_BASE);
+
+	value = readl(clk_rst->base + PLLM_BASE);
+	value |= PLLM_BASE_ENABLE;
+	writel(value, clk_rst->base + PLLM_BASE);
+
+	while (true) {
+		value = readl(clk_rst->base + PLLM_BASE);
+		if (value & PLLM_BASE_LOCK)
+			break;
+	}
+
+	/* stabilization delay */
+	udelay(10);
+
+	value = readl(clk_rst->base + PLLM_OUT);
+	value |= PLLM_OUT_RESET_DISABLE;
+	writel(value, clk_rst->base + PLLM_OUT);
+
+	value = readl(clk_rst->base + CLK_SOURCE_EMC);
+	value &= ~CLK_SOURCE_EMC_2X_CLK_SRC_MASK;
+	value |= params->emc_clock_source;
+
+	if ((params->mc_emem_arb_misc0 & CLK_SOURCE_EMC_MC_SAME_FREQ) == 0)
+		value &= ~CLK_SOURCE_EMC_MC_SAME_FREQ;
+	else
+		value |= CLK_SOURCE_EMC_MC_SAME_FREQ;
+
+	writel(value, clk_rst->base + CLK_SOURCE_EMC);
+
+	clock_periph_enable(&clk_emc);
+	clock_periph_enable(&clk_mc);
+}
+
 void reset_cpu_deassert(const struct clk_rst *clk_rst)
 {
 	uint32_t value;

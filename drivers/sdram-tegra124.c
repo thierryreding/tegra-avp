@@ -346,9 +346,6 @@ void sdram_init(struct bct_sdram_params *params)
 
 	clock_pllm_init(&clk_rst, params);
 
-	clock_periph_enable(&clk_emc);
-	clock_periph_enable(&clk_mc);
-
 	reset_deassert(&rst_emc);
 	reset_deassert(&rst_mc);
 

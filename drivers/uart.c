@@ -172,7 +172,9 @@ void uart_flush(struct uart *uart)
 	 * This seems to be necessary on Tegra114 to make sure the FIFO is
 	 * completely flushed.
 	 */
+#ifdef CONFIG_TEGRA114
 	udelay(1000);
+#endif
 }
 
 struct uart uarta = {
@@ -189,7 +191,7 @@ struct uart uartd = {
 	.rst = &rst_uartd,
 };
 
-#if defined(CONFIG_TEGRA132)
+#if defined(CONFIG_TEGRA132) || defined(CONFIG_TEGRA210)
 struct uart *debug = &uarta;
 #else
 struct uart *debug = &uartd;

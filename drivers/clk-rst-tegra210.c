@@ -1,9 +1,25 @@
 #include <types.h>
 
+#define writel _writel
+#define readl _readl
+
 #include <avp/bct.h>
 #include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/timer.h>
+
+#undef readl
+#define readl(a)	({					\
+		uint32_t v = _readl(a);				\
+		uart_printf(debug, "%08lx > %08x\n", a, v);	\
+		v;						\
+	})
+
+#undef writel
+#define writel(v, a)	({					\
+		uart_printf(debug, "%08lx < %08x\n", a, v);	\
+		_writel(v, a);					\
+	})
 
 #define CCLK_BURST_POLICY 0x020
 #define  CCLK_BURST_POLICY_CPU_STATE_RUN (2 << 28)
@@ -15,6 +31,21 @@
 #define SUPER_CCLK_DIVIDER 0x024
 #define  SUPER_CCLK_DIVIDER_ENABLE (1 << 31)
 
+#define PLLM_BASE 0x090
+#define  PLLM_BASE_ENABLE (1 << 30)
+#define  PLLM_BASE_LOCK (1 << 27)
+#define  PLLM_BASE_DIV2(x) (((x) & 0x1) << 20)
+#define  PLLM_BASE_DIVN(x) (((x) & 0xff) << 8)
+#define  PLLM_BASE_DIVM(x) (((x) & 0xff) << 0)
+
+#define PLLM_MISC1 0x098
+#define  PLLM_MISC1_SETUP(x) (((x) & 0xffff) << 0)
+
+#define PLLM_MISC2 0x09c
+#define  PLLM_MISC2_EN_LCKDET (1 << 4)
+#define  PLLM_MISC2_KCP(x) (((x) & 0x3) << 1)
+#define  PLLM_MISC2_KVCO(x) (((x) & 0x1) << 0)
+
 #define PLLX_BASE 0x0e0
 #define  PLLX_BASE_BYPASS (1 << 31)
 #define  PLLX_BASE_ENABLE (1 << 30)
@@ -25,6 +56,10 @@
 
 #define PLLX_MISC 0x0e4
 #define  PLLX_MISC_LOCK_ENABLE (1 << 18)
+
+#define CLK_SOURCE_EMC 0x19c
+#define  CLK_SOURCE_EMC_2X_CLK_SRC_MASK (0x7 << 29)
+#define  CLK_SOURCE_EMC_MC_SAME_FREQ (1 << 16)
 
 #define CLK_SOURCE_MSELECT 0x3b4
 #define  CLK_SOURCE_MSELECT_CLK_SRC_MASK (0x7 << 29)
@@ -43,6 +78,8 @@
 #define PLLX_MISC3 0x518
 #define  PLLX_MISC3_IDDQ (1 << 3)
 
+#define CLK_SOURCE_EMC_DLL 0x664
+
 static unsigned long clock_pllp_get_rate(const struct clock *clk)
 {
 	return 408000000;
@@ -57,32 +94,48 @@ const struct clock clk_pllp = {
 	.ops = &pllp_ops,
 };
 
+const struct clock_periph clk_emc_dll = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x284,
+	.clr = 0x288,
+	.bit = 14,
+};
+
+const struct clock_periph clk_mc1 = {
+	.base = {
+		.clk_rst = &clk_rst,
+	},
+	.set = 0x448,
+	.clr = 0x44c,
+	.bit = 30,
+};
+
 void clock_pllm_init(const struct clk_rst *clk_rst,
 		     const struct bct_sdram_params *params)
 {
 	uint32_t value;
 
-	value = readl(clk_rst->base + PLLM_OUT);
-	value &= ~PLLM_OUT_RESET_DISABLE;
-	writel(value, clk_rst->base + PLLM_OUT);
-
-	value = PLLM_MISC1_PD_LSHIFT_PH135(params->pll_m_pd_lshift_ph135) |
-		PLLM_MISC1_PD_LSHIFT_PH90(params->pll_m_pd_lshift_ph90) |
-		PLLM_MISC1_PD_LSHIFT_PH45(params->pll_m_pd_lshift_ph45) |
-		PLLM_MISC1_SETUP(params->pll_m_setup_control);
+	value = PLLM_MISC1_SETUP(params->pll_m_setup_control);
+	uart_printf(debug, "MISC1: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_MISC1);
 
-	value = PLLM_MISC2_KCP(params->pll_m_kcp) |
+	value = PLLM_MISC2_EN_LCKDET |
+		PLLM_MISC2_KCP(params->pll_m_kcp) |
 		PLLM_MISC2_KVCO(params->pll_m_kvco);
+	uart_printf(debug, "MISC2: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_MISC2);
 
 	value = PLLM_BASE_DIV2(params->pll_m_select_div2) |
 		PLLM_BASE_DIVN(params->pll_m_div_n) |
 		PLLM_BASE_DIVM(params->pll_m_div_m);
+	uart_printf(debug, "BASE: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_BASE);
 
 	value = readl(clk_rst->base + PLLM_BASE);
 	value |= PLLM_BASE_ENABLE;
+	uart_printf(debug, "BASE: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_BASE);
 
 	while (true) {
@@ -93,10 +146,6 @@ void clock_pllm_init(const struct clk_rst *clk_rst,
 
 	/* stabilization delay */
 	udelay(10);
-
-	value = readl(clk_rst->base + PLLM_OUT);
-	value |= PLLM_OUT_RESET_DISABLE;
-	writel(value, clk_rst->base + PLLM_OUT);
 
 	value = readl(clk_rst->base + CLK_SOURCE_EMC);
 	value &= ~CLK_SOURCE_EMC_2X_CLK_SRC_MASK;
@@ -109,14 +158,27 @@ void clock_pllm_init(const struct clk_rst *clk_rst,
 
 	writel(value, clk_rst->base + CLK_SOURCE_EMC);
 
+	if (params->emc_clock_source_dll) {
+		value = params->emc_clock_source_dll;
+		writel(value, clk_rst->base + CLK_SOURCE_EMC_DLL);
+	}
+
+	if (params->clear_clk2mc1)
+		clock_periph_disable(&clk_mc1);
+
 	clock_periph_enable(&clk_emc);
 	clock_periph_enable(&clk_mc);
+
+	clock_periph_enable(&clk_emc_dll);
+
+	reset_deassert(&rst_emc);
+	reset_deassert(&rst_mc);
 }
 
 static void pllx_init(const struct clk_rst *clk_rst)
 {
 	/* XXX: do not hardcode the oscillator reference frequency */
-	unsigned int divm, divn, divp, rate = 700000, ref = 12000;
+	unsigned int divm, divn, divp, rate = 700000, ref = 38400;
 	unsigned int vco_min = 700000;
 	uint32_t value;
 
@@ -166,6 +228,8 @@ void clock_cpu_setup(const struct clk_rst *clk_rst)
 	unsigned int divider;
 	uint32_t value;
 
+	uart_printf(debug, "> %s(clk_rst=%p)\n", __func__, clk_rst);
+
 	pllx_init(clk_rst);
 
 	/* switch MSELECT to PLLP */
@@ -190,32 +254,20 @@ void clock_cpu_setup(const struct clk_rst *clk_rst)
 	writel(value, clk_rst->base + CCLK_BURST_POLICY);
 
 	writel(SUPER_CCLK_DIVIDER_ENABLE, clk_rst->base + SUPER_CCLK_DIVIDER);
+
+	uart_printf(debug, "< %s()\n", __func__);
 }
 
 void reset_cpu_deassert(const struct clk_rst *clk_rst)
 {
 	uint32_t value;
 
-	/* clear non-CPU resets */
-	value = RST_CMPLX_NONCPURESET;
-	writel(value, clk_rst->base + RST_CPULP_CMPLX_CLR);
-
+	/* clear non-CPU reset */
 	value = RST_CMPLX_NONCPURESET;
 	writel(value, clk_rst->base + RST_CPUG_CMPLX_CLR);
 
 	value = RST_CMPLX_PRESETDBG | RST_CMPLX_L2RESET |
 		RST_CMPLX_CXRESET(0) | RST_CMPLX_CORERESET(0) |
-		RST_CMPLX_DBGRESET(0) | RST_CMPLX_CPURESET(0);
-	writel(value, clk_rst->base + RST_CPULP_CMPLX_CLR);
-
-	value = RST_CMPLX_PRESETDBG | RST_CMPLX_L2RESET |
-		RST_CMPLX_CXRESET(3) | RST_CMPLX_CXRESET(2) |
-		RST_CMPLX_CXRESET(1) | RST_CMPLX_CXRESET(0) |
-		RST_CMPLX_CORERESET(3) | RST_CMPLX_CORERESET(2) |
-		RST_CMPLX_CORERESET(1) | RST_CMPLX_CORERESET(0) |
-		RST_CMPLX_DBGRESET(3) | RST_CMPLX_DBGRESET(2) |
-		RST_CMPLX_DBGRESET(1) | RST_CMPLX_DBGRESET(0) |
-		RST_CMPLX_CPURESET(3) | RST_CMPLX_CPURESET(2) |
-		RST_CMPLX_CPURESET(1) | RST_CMPLX_CPURESET(0);
+		RST_CMPLX_CPURESET(0);
 	writel(value, clk_rst->base + RST_CPUG_CMPLX_CLR);
 }

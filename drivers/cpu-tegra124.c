@@ -1,4 +1,5 @@
 #include <avp/clk-rst.h>
+#include <avp/cpu.h>
 #include <avp/flow.h>
 #include <avp/i2c.h>
 #include <avp/io.h>

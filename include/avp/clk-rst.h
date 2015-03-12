@@ -75,6 +75,7 @@ extern const struct clock_periph clk_csite;
 extern const struct clock_periph clk_cpug;
 extern const struct clock_periph clk_cpulp;
 extern const struct clock_periph clk_mselect;
+extern const struct clock_periph clk_dvfs;
 
 extern const struct reset rst_cpu;
 extern const struct reset rst_uarta;
@@ -84,6 +85,7 @@ extern const struct reset rst_i2c5;
 extern const struct reset rst_emc;
 extern const struct reset rst_uartd;
 extern const struct reset rst_mselect;
+extern const struct reset rst_dvfs;
 
 void clock_cpu_setup(const struct clk_rst *clk_rst);
 void reset_cpu_deassert(const struct clk_rst *clk_rst);
