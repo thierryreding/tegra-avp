@@ -30,8 +30,6 @@ static void __naked switch_to_aarch64(void)
 
 bool start_cpu(uint32_t entry)
 {
-	uart_printf(debug, "> %s(entry=%08x)\n", __func__, entry);
-
 	flow_set_active_cluster(&flow, FLOW_CLUSTER_ID_G);
 
 	/* TODO: implement MSELECT work around */
@@ -70,21 +68,17 @@ bool start_cpu(uint32_t entry)
 		/* enable GPIO1 */
 		i2c_smbus_read_byte_data(&dvc, 0x3c, 0x40, &value);
 		value &= ~(1 << 1);
-		uart_printf(debug, "  0x40: %02x\n", value);
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x40, value);
 
 		value = (0x1 << 3) | 1;
-		uart_printf(debug, "  0x37: %02x\n", value);
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x37, value);
 
 		/* enable GPIO5 */
 		i2c_smbus_read_byte_data(&dvc, 0x3c, 0x40, &value);
 		value &= ~(1 << 5);
-		uart_printf(debug, "  0x40: %02x\n", value);
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x40, value);
 
 		value = (0x1 << 3) | 1;
-		uart_printf(debug, "  0x3b: %02x\n", value);
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x3b, value);
 	}
 
@@ -118,6 +112,5 @@ bool start_cpu(uint32_t entry)
 	//reset_deassert(&rst_mselect);
 	reset_cpu_deassert(&clk_rst);
 
-	uart_printf(debug, "< %s()\n", __func__);
 	return true;
 }

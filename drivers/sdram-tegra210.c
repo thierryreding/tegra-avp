@@ -1,19 +1,9 @@
-//#define writel _writel
-
 #include <avp/bct.h>
 #include <avp/i2c.h>
 #include <avp/io.h>
 #include <avp/iomap.h>
 #include <avp/timer.h>
 #include <avp/uart.h>
-
-/*
-#undef writel
-#define writel(v, a)	({					\
-		uart_printf(debug, "%08x < %08x\n", a, v);	\
-		_writel(v, a);					\
-	})
-*/
 
 /*
  * PMC
@@ -468,11 +458,8 @@ void sdram_init(struct bct_sdram_params *params)
 	unsigned int i;
 	uint32_t value;
 
-	uart_printf(debug, "> %s(params=%p)\n", __func__, params);
-	uart_printf(debug, "  memory type: %x\n", params->memory_type);
-
 	if (1) {
-		uint8_t value, offset;
+		uint8_t value;
 
 		reset_assert(&rst_dvfs);
 		clock_periph_enable(&clk_dvfs);
@@ -482,19 +469,10 @@ void sdram_init(struct bct_sdram_params *params)
 
 		i2c_init(&dvc, 100000);
 
-		uart_printf(debug, "PMIC ID:\n");
-
-		for (offset = 0x58; offset <= 0x5d; offset++) {
-			i2c_smbus_read_byte_data(&dvc, 0x3c, offset, &value);
-			uart_printf(debug, "  %02x: %02x\n", offset, value);
-		}
-
 		/* disable SD1 remote sense */
 		i2c_smbus_read_byte_data(&dvc, 0x3c, 0x22, &value);
-		uart_printf(debug, "  0x22: %02x\n", value);
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x22, 0x05);
 		i2c_smbus_read_byte_data(&dvc, 0x3c, 0x22, &value);
-		uart_printf(debug, "  0x22: %02x\n", value);
 		/* set DDR voltage to 1125 mV */
 		i2c_smbus_write_byte_data(&dvc, 0x3c, 0x17, 0x2a);
 
@@ -508,17 +486,12 @@ void sdram_init(struct bct_sdram_params *params)
 	udelay(5);
 	*/
 
-	uart_printf(debug, "  setting up PMC...\n");
-
-	uart_printf(debug, "  PMC_VDDP_SEL: %08x\n", params->pmc_vddp_sel);
 	writel(params->pmc_vddp_sel, pmc + PMC_VDDP_SEL);
-	uart_printf(debug, "  waiting for %u us\n", params->pmc_vddp_sel_wait);
 	udelay(params->pmc_vddp_sel_wait);
 
 	value = readl(pmc + PMC_DDR_PWR);
 	value &= ~PMC_DDR_PWR_VAL_MASK;
 	value |= params->pmc_ddr_pwr & PMC_DDR_PWR_VAL_MASK;
-	uart_printf(debug, "  PMC_DDR_PWR: %08x\n", params->pmc_ddr_pwr);
 	writel(value, pmc + PMC_DDR_PWR);
 
 	value = readl(pmc + PMC_NO_IOPOWER);
@@ -528,20 +501,13 @@ void sdram_init(struct bct_sdram_params *params)
 	value |= params->pmc_no_iopower & PMC_NO_IOPOWER_MEM_COMP;
 	/* XXX */
 	value = 0;
-	uart_printf(debug, "  PMC_NO_IOPOWER: %08x\n", value);
 	writel(value, pmc + PMC_NO_IOPOWER);
 
-	uart_printf(debug, "  PMC_REG_SHORT: %08x\n", params->pmc_reg_short);
 	writel(params->pmc_reg_short, pmc + PMC_REG_SHORT);
-	uart_printf(debug, "  PMC_DDR_CNTRL: %08x\n", params->pmc_ddr_cntrl);
 	writel(params->pmc_ddr_cntrl, pmc + PMC_DDR_CNTRL);
 
-	if (params->emc_bct_spare0) {
-		uart_printf(debug, "  %08x < %08x\n", params->emc_bct_spare0, params->emc_bct_spare1);
+	if (params->emc_bct_spare0)
 		writel(params->emc_bct_spare1, params->emc_bct_spare0);
-	}
-
-	uart_printf(debug, "  setting up SDRAM...\n");
 
 	if (warmboot) {
 		/* XXX */
@@ -549,25 +515,19 @@ void sdram_init(struct bct_sdram_params *params)
 		value = (params->emc_pmc_scratch1 & 0x3fffffff) | 1 << 31;
 		value = (value ^ 0x0000ffff) & 0xc000ffff;
 
-		uart_printf(debug, "  PMC_IO_DPD3_REQ: %08x\n", value);
 		writel(value, pmc + PMC_IO_DPD3_REQ);
-		uart_printf(debug, "  waiting for %u us\n", params->pmc_io_dpd3_req_wait);
 		udelay(params->pmc_io_dpd3_req_wait);
 
 		value = (params->emc_pmc_scratch2 & 0x3fffffff) | 1 << 31;
 		value = (value ^ 0x3fff0000) & 0xffff0000;
 
-		uart_printf(debug, "  PMC_IO_DPD4_REQ: %08x\n", value);
 		writel(value, pmc + PMC_IO_DPD4_REQ);
-		uart_printf(debug, "  waiting for %u us\n", params->pmc_io_dpd4_req_wait);
 		udelay(params->pmc_io_dpd4_req_wait);
 
 		value = (params->emc_pmc_scratch2 & 0x3fffffff) | 1 << 31;
 		value = (value ^ 0x0000ffff) & 0xc000ffff;
 
-		uart_printf(debug, "  PMC_IO_DPD4_REQ: %08x\n", value);
 		writel(value, pmc + PMC_IO_DPD4_REQ);
-		uart_printf(debug, "  waiting for %u us\n", params->pmc_io_dpd4_req_wait);
 		udelay(params->pmc_io_dpd4_req_wait);
 	}
 
@@ -576,7 +536,6 @@ void sdram_init(struct bct_sdram_params *params)
 
 	/* ... */
 
-	uart_printf(debug, "  setting up PLLM...\n");
 	clock_pllm_init(&clk_rst, params);
 
 	writel(params->emc_pmacro_vttgen_ctrl_0, emc + EMC_PMACRO_VTTGEN_CTRL_0);
@@ -612,7 +571,6 @@ void sdram_init(struct bct_sdram_params *params)
 	writel(params->emc_pmacro_brick_mapping_2, emc + EMC_PMACRO_BRICK_MAPPING_2);
 
 	value = (params->emc_pmacro_brick_ctrl_rfu1 | ~0x01120112) & 0x1fff1fff;
-	uart_printf(debug, "  EMC_PMACRO_BRICK_CTRL_RFU1: %08x\n", value);
 	writel(value, emc + EMC_PMACRO_BRICK_CTRL_RFU1);
 
 	writel(params->emc_config_sample_delay, emc + EMC_CONFIG_SAMPLE_DELAY);
@@ -672,7 +630,6 @@ void sdram_init(struct bct_sdram_params *params)
 	writel(params->emc_quse_brlshft_3, emc + EMC_QUSE_BRLSHFT_3);
 
 	value = (params->emc_pmacro_brick_ctrl_rfu1 | ~0x01bf01bf) & 0x1fff1fff;
-	uart_printf(debug, "  EMC_PMACRO_BRICK_CTRL_RFU1: %08x\n", value);
 	writel(value, emc + EMC_PMACRO_BRICK_CTRL_RFU1);
 
 	writel(params->emc_pmacro_pad_cfg_ctrl, emc + EMC_PMACRO_PAD_CFG_CTRL);
@@ -786,7 +743,7 @@ void sdram_init(struct bct_sdram_params *params)
 #if 0
 	writel(params->emc_pmacro_common_pad_tx_ctrl, emc + EMC_PMACRO_COMMON_PAD_TX_CTRL);
 #else
-	uart_printf(debug, "  EMC_PMACRO_COMMON_PAD_TX_CTRL: %08x\n", params->emc_pmacro_common_pad_tx_ctrl);
+	/* XXX */
 	value = params->emc_pmacro_common_pad_tx_ctrl;
 	value = 0xe;
 	writel(value, emc + EMC_PMACRO_COMMON_PAD_TX_CTRL);
@@ -1006,7 +963,6 @@ void sdram_init(struct bct_sdram_params *params)
 			value = params->emc_pin_gpio_en << 16 |
 				params->emc_pin_gpio << 12 |
 				0 << 8 | 0 << 4 | 0 << 0;
-			uart_printf(debug, "  EMC_PIN: %08x\n", value);
 			writel(value, emc + EMC_PIN);
 			(void)readl(emc + EMC_PIN);
 
@@ -1015,7 +971,6 @@ void sdram_init(struct bct_sdram_params *params)
 			value = params->emc_pin_gpio_en << 16 |
 				params->emc_pin_gpio << 12 |
 				1 << 8 | 0 << 4 | 0 << 0;
-			uart_printf(debug, "  EMC_PIN: %08x\n", value);
 			writel(value, emc + EMC_PIN);
 			(void)readl(emc + EMC_PIN);
 
@@ -1026,7 +981,6 @@ void sdram_init(struct bct_sdram_params *params)
 	value = params->emc_pin_gpio_en << 16 |
 		params->emc_pin_gpio << 12 |
 		1 << 8 | 0 << 4 | 1 << 0;
-	uart_printf(debug, "  EMC_PIN: %08x\n", value);
 	writel(value, emc + EMC_PIN);
 	(void)readl(emc + EMC_PIN);
 
@@ -1053,8 +1007,6 @@ void sdram_init(struct bct_sdram_params *params)
 	} else {
 		switch (params->memory_type) {
 		case LPDDR4:
-			uart_printf(debug, "EMC_DEV_SELECT: %08x\n", params->emc_dev_select);
-
 			/* XXX init LPDDR4 */
 			if (params->emc_bct_spare10)
 				writel(params->emc_bct_spare11, params->emc_bct_spare10);
@@ -1104,7 +1056,6 @@ void sdram_init(struct bct_sdram_params *params)
 		value = params->emc_dev_select << 30 |
 			((1 << params->emc_extra_refresh_num) - 1) << 8 |
 			1 << 1 | 1 << 0;
-		uart_printf(debug, "  EMC_REF: %08x\n", value);
 		writel(value, emc + EMC_REF);
 	}
 
@@ -1117,7 +1068,6 @@ void sdram_init(struct bct_sdram_params *params)
 	writel(params->emc_fdpd_ctrl_cmd, emc + EMC_FDPD_CTRL_CMD);
 	writel(params->emc_sel_dpd_ctrl, emc + EMC_SEL_DPD_CTRL);
 
-	uart_printf(debug, "  EMC_FBIO_SPARE: %08x\n", params->emc_fbio_spare);
 	writel(params->emc_fbio_spare, emc + EMC_FBIO_SPARE);
 	writel(EMC_TIMING_CONTROL_UPDATE, emc + EMC_TIMING_CONTROL);
 
@@ -1132,7 +1082,6 @@ void sdram_init(struct bct_sdram_params *params)
 	writel(params->mc_sec_carveout_ctrl, mc + MC_SEC_CARVEOUT_CTRL);
 	writel(params->mc_mts_carveout_ctrl, mc + MC_MTS_CARVEOUT_CTRL);
 
-	if (0) {
 	for (i = 0; i < 5; i++) {
 		writel(params->mc_security_carveout[i].bom, mc + MC_SECURITY_CARVEOUT_BOM(i));
 		writel(params->mc_security_carveout[i].bom_hi, mc + MC_SECURITY_CARVEOUT_BOM_HI(i));
@@ -1149,28 +1098,9 @@ void sdram_init(struct bct_sdram_params *params)
 		writel(params->mc_security_carveout[i].client_force_internal_access4, mc + MC_SECURITY_CARVEOUT_CLIENT_FORCE_INTERNAL_ACCESS4(i));
 		writel(params->mc_security_carveout[i].cfg, mc + MC_SECURITY_CARVEOUT_CFG(i));
 	}
-	}
 
 	/* lock EMEM configuration registers */
 	writel(MC_EMEM_CFG_ACCESS_CTRL_DISABLE, mc + MC_EMEM_CFG_ACCESS_CTRL);
 
-	if (1) {
-		volatile uint32_t *ptr = (volatile uint32_t *)0x80000100;
-		unsigned int i;
-
-		uart_printf(debug, "writing signature to 0x80000100\n");
-		*(volatile uint32_t *)0x80000100 = 0xaa55aa55;
-		uart_printf(debug, "signature: %08x\n", *(volatile uint32_t *)0x80000100);
-
-		if (*(volatile uint32_t *)0x80000100 != 0xaa55aa55)
-			uart_printf(debug, "memory not properly initialized: %08x\n", *(volatile uint32_t *)0x80000100);
-
-		for (i = 0; i < 16; i++)
-			ptr[i] = 0xaa551100;
-
-		for (i = 0; i < 16; i++)
-			uart_printf(debug, "%p: %08x\n", &ptr[i], ptr[i]);
-	}
-
-	uart_printf(debug, "< %s()\n", __func__);
+	/* XXX verify SDRAM */
 }

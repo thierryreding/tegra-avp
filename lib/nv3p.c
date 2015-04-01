@@ -363,8 +363,8 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 
 	size = command.size;
 
-	uart_printf(debug, "downloading BCT (%zu bytes, %zu)...\n", size, sizeof(bct));
-	uart_printf(debug, "  SDRAM params: %zu\n", sizeof(struct bct_sdram_params));
+	uart_printf(debug, "downloading BCT (%zu bytes, expected %zu)...\n",
+		    size, sizeof(bct));
 
 	num = nv3p_send_ack(nv3p, sequence);
 	if (num < 0)
@@ -392,7 +392,6 @@ static int nv3p_process_bct(struct nv3p *nv3p)
 		unsigned int index = (value >> 4) & 0x3;
 #endif
 
-		uart_printf(debug, "index: %u\n", index);
 		sdram_init(&bct.sdram_params[index]);
 
 		/*

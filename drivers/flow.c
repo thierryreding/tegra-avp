@@ -25,7 +25,6 @@ void flow_set_active_cluster(struct flow *flow, enum flow_cluster_id id)
 #else
 	value = readl(flow->base + FLOW_CTLR_CLUSTER_CONTROL);
 #endif
-	uart_printf(debug, "FLOW_CTLR_CLUSTER_CONTROL: %08x\n", value);
 	value &= ~FLOW_CTLR_CLUSTER_CONTROL_ACTIVE_MASK;
 	value |= FLOW_CTLR_CLUSTER_CONTROL_ACTIVE(id);
 #ifdef CONFIG_TEGRA210

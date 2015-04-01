@@ -122,10 +122,10 @@ struct nv3p_platform_info {
 	uint32_t sdram_conf_strap;
 	uint32_t reserved[2];
 	struct nv3p_board_id board_id;
-	/**/
+	/*
 	uint32_t warranty_fuse;
 	uint32_t skip_auto_detect;
-	/**/
+	*/
 } __packed;
 
 struct nv3p_packet_platform_info {

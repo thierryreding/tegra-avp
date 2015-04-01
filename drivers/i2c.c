@@ -5,7 +5,6 @@
 #include <avp/io.h>
 #include <avp/iomap.h>
 #include <avp/timer.h>
-#include <avp/uart.h>
 
 #define I2C_CNFG      0x000
 #define  I2C_CNFG_SEND  (1 << 9)
@@ -29,11 +28,6 @@ int i2c_init(struct i2c *i2c, unsigned int speed)
 	clock_periph_set_source_divisor(i2c->clk, 0, divisor);
 
 	reset_deassert(i2c->rst);
-
-	if (1) {
-		uint32_t value = readl(i2c->base + I2C_CLK_DIV);
-		uart_printf(debug, "clock divider: %08x\n", value);
-	}
 
 	return 0;
 }

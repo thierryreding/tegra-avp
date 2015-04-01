@@ -135,7 +135,9 @@ void clock_osc_init(const struct clk_rst *clk_rst)
 	value |= SPARE_REG_CLK_M_DIVISOR(1);
 	writel(value, clk_rst->base + SPARE_REG0);
 
+	/* pll_ref clock runs at the same speed as the oscillator */
 	pll_ref_div = OSC_CTRL_PLL_REF_DIV1;
+	/* but clk_m, which feeds into the timer runs at half */
 	timer_us_init(OSC_FREQ_19_2);
 #else
 	timer_us_init(freq);

@@ -1,25 +1,9 @@
 #include <types.h>
 
-#define writel _writel
-#define readl _readl
-
 #include <avp/bct.h>
 #include <avp/clk-rst.h>
 #include <avp/io.h>
 #include <avp/timer.h>
-
-#undef readl
-#define readl(a)	({					\
-		uint32_t v = _readl(a);				\
-		uart_printf(debug, "%08lx > %08x\n", a, v);	\
-		v;						\
-	})
-
-#undef writel
-#define writel(v, a)	({					\
-		uart_printf(debug, "%08lx < %08x\n", a, v);	\
-		_writel(v, a);					\
-	})
 
 #define CCLK_BURST_POLICY 0x020
 #define  CCLK_BURST_POLICY_CPU_STATE_RUN (2 << 28)
@@ -118,24 +102,20 @@ void clock_pllm_init(const struct clk_rst *clk_rst,
 	uint32_t value;
 
 	value = PLLM_MISC1_SETUP(params->pll_m_setup_control);
-	uart_printf(debug, "MISC1: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_MISC1);
 
 	value = PLLM_MISC2_EN_LCKDET |
 		PLLM_MISC2_KCP(params->pll_m_kcp) |
 		PLLM_MISC2_KVCO(params->pll_m_kvco);
-	uart_printf(debug, "MISC2: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_MISC2);
 
 	value = PLLM_BASE_DIV2(params->pll_m_select_div2) |
 		PLLM_BASE_DIVN(params->pll_m_div_n) |
 		PLLM_BASE_DIVM(params->pll_m_div_m);
-	uart_printf(debug, "BASE: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_BASE);
 
 	value = readl(clk_rst->base + PLLM_BASE);
 	value |= PLLM_BASE_ENABLE;
-	uart_printf(debug, "BASE: %08x\n", value);
 	writel(value, clk_rst->base + PLLM_BASE);
 
 	while (true) {
@@ -228,8 +208,6 @@ void clock_cpu_setup(const struct clk_rst *clk_rst)
 	unsigned int divider;
 	uint32_t value;
 
-	uart_printf(debug, "> %s(clk_rst=%p)\n", __func__, clk_rst);
-
 	pllx_init(clk_rst);
 
 	/* switch MSELECT to PLLP */
@@ -254,8 +232,6 @@ void clock_cpu_setup(const struct clk_rst *clk_rst)
 	writel(value, clk_rst->base + CCLK_BURST_POLICY);
 
 	writel(SUPER_CCLK_DIVIDER_ENABLE, clk_rst->base + SUPER_CCLK_DIVIDER);
-
-	uart_printf(debug, "< %s()\n", __func__);
 }
 
 void reset_cpu_deassert(const struct clk_rst *clk_rst)
